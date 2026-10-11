@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Item Stacking —— 物品堆叠增强 mod（Probably Stolen 0.46D, MelonLoader）。
+
+    公共属性（游戏路径 / TargetFramework / 输出路径）在 ..\_shared\CommonMod.props。
+    堆叠机制的数据与钩子点见 ..\资料库\堆叠资料库.md。
+  -->
+
+  <Import Project="..\_shared\CommonMod.props" />
+
+  <PropertyGroup>
+    <!-- ★ 冻结不改：= DLL 名 = MelonPreferences 配置段名 -->
+    <AssemblyName>ItemStacking</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <RootNamespace>ItemStacking</RootNamespace>
+  </PropertyGroup>
+
+  <!-- ── 引用：全部 Private=False，绝不把游戏 DLL 拷进输出目录 ── -->
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MLNet)\MelonLoader.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MLNet)\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MLNet)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(MLNet)\Il2CppInterop.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.HarmonySupport">
+      <HintPath>$(MLNet)\Il2CppInterop.HarmonySupport.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(MLIl2Cpp)\Il2Cppmscorlib.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(MLIl2Cpp)\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(MLIl2Cpp)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- 0.3.0：UnityEngine.Input.GetKey(KeyCode) 在 InputLegacyModule -->
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(MLIl2Cpp)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- 读 item 的 identifier / unitCount 等不需要 UI 模块；如需改 UI 再加 -->
+  </ItemGroup>
+
+</Project>

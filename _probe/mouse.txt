@@ -1,0 +1,275 @@
+
+===== OnEventMouseMove (0x7BA900) =====
+0x1807ba900:  mov       qword ptr [rsp + 8], rbx
+0x1807ba905:  mov       qword ptr [rsp + 0x10], rsi
+0x1807ba90a:  push      rdi
+0x1807ba90b:  sub       rsp, 0x70
+0x1807ba90f:  cmp       byte ptr [rip + 0x1f963ea], 0
+0x1807ba916:  mov       rdi, r8
+0x1807ba919:  mov       rsi, rdx
+0x1807ba91c:  mov       rbx, rcx
+0x1807ba91f:  jne       0x1807ba934
+0x1807ba921:  lea       rcx, [rip + 0x1e41e68]
+0x1807ba928:  call      0x1802154a0
+0x1807ba92d:  mov       byte ptr [rip + 0x1f963cc], 1
+0x1807ba934:  cmp       dword ptr [rbx + 0x64], 0
+0x1807ba938:  je        0x1807baae0
+0x1807ba93e:  mov       rcx, qword ptr [rbx + 0x50]
+0x1807ba942:  test      rcx, rcx
+0x1807ba945:  je        0x1807baae0
+0x1807ba94b:  cmp       byte ptr [rbx + 0x68], 0
+0x1807ba94f:  je        0x1807ba981
+0x1807ba951:  xor       edx, edx
+0x1807ba953:  call      0x18078b310   ; <- GameItemElement$$IsDestroyed
+0x1807ba958:  test      al, al
+0x1807ba95a:  je        0x1807ba977
+0x1807ba95c:  xor       edx, edx
+0x1807ba95e:  mov       rcx, rbx
+0x1807ba961:  lea       r11, [rsp + 0x70]
+0x1807ba966:  mov       rbx, qword ptr [r11 + 0x10]
+0x1807ba96a:  mov       rsi, qword ptr [r11 + 0x18]
+0x1807ba96e:  mov       rsp, r11
+0x1807ba971:  pop       rdi
+0x1807ba972:  jmp       0x1807b9450   ; <- ItemMouseDragHandler$$AbortDrag
+0x1807ba977:  cmp       byte ptr [rbx + 0x68], 0
+0x1807ba97b:  jne       0x1807baabf
+0x1807ba981:  movsd     xmm1, qword ptr [rbx + 0x58]
+0x1807ba986:  mov       eax, dword ptr [rbx + 0x60]
+0x1807ba989:  movaps    xmm0, xmm1
+0x1807ba98c:  movaps    xmmword ptr [rsp + 0x60], xmm6
+0x1807ba991:  movss     xmm6, dword ptr [rsi + 4]
+0x1807ba996:  movaps    xmmword ptr [rsp + 0x50], xmm7
+0x1807ba99b:  movsd     xmm7, qword ptr [rsi]
+0x1807ba99f:  mov       dword ptr [rsp + 0x38], eax
+0x1807ba9a3:  subss     xmm7, xmm1
+0x1807ba9a7:  mov       eax, dword ptr [rsi + 8]
+0x1807ba9aa:  movaps    xmmword ptr [rsp + 0x40], xmm8
+0x1807ba9b0:  mov       dword ptr [rsp + 0x28], eax
+0x1807ba9b4:  movss     xmm8, dword ptr [rsp + 0x28]
+0x1807ba9bb:  subss     xmm8, dword ptr [rsp + 0x38]
+0x1807ba9c2:  shufps    xmm0, xmm0, 0x55
+0x1807ba9c6:  subss     xmm6, xmm0
+0x1807ba9ca:  movsd     qword ptr [rsp + 0x30], xmm1
+0x1807ba9d0:  cmp       byte ptr [rip + 0x1f94944], 0
+0x1807ba9d7:  jne       0x1807ba9ec
+0x1807ba9d9:  lea       rcx, [rip + 0x1e80630]
+0x1807ba9e0:  call      0x1802154a0
+0x1807ba9e5:  mov       byte ptr [rip + 0x1f9492f], 1
+0x1807ba9ec:  mov       rcx, qword ptr [rip + 0x1e8061d]
+0x1807ba9f3:  cmp       dword ptr [rcx + 0xe0], 0
+0x1807ba9fa:  jne       0x1807baa01
+0x1807ba9fc:  call      0x1801e18b0
+0x1807baa01:  mulss     xmm6, xmm6
+0x1807baa05:  xorps     xmm1, xmm1
+0x1807baa08:  mulss     xmm7, xmm7
+0x1807baa0c:  xorps     xmm0, xmm0
+0x1807baa0f:  mulss     xmm8, xmm8
+0x1807baa14:  addss     xmm6, xmm7
+0x1807baa18:  movaps    xmm7, xmmword ptr [rsp + 0x50]
+0x1807baa1d:  addss     xmm6, xmm8
+0x1807baa22:  movaps    xmm8, xmmword ptr [rsp + 0x40]
+0x1807baa28:  cvtss2sd  xmm1, xmm6
+0x1807baa2c:  movaps    xmm6, xmmword ptr [rsp + 0x60]
+0x1807baa31:  ucomisd   xmm0, xmm1
+0x1807baa35:  ja        0x1807baa3d
+0x1807baa37:  sqrtpd    xmm0, xmm1
+0x1807baa3b:  jmp       0x1807baa45
+0x1807baa3d:  movaps    xmm0, xmm1
+0x1807baa40:  call      0x180287e20
+0x1807baa45:  cvtsd2ss  xmm0, xmm0
+0x1807baa49:  comiss    xmm0, dword ptr [rbx + 0x20]
+0x1807baa4d:  jb        0x1807baabf
+0x1807baa4f:  cmp       byte ptr [rip + 0x1f94a49], 0
+0x1807baa56:  jne       0x1807baa6b
+0x1807baa58:  lea       rcx, [rip + 0x1e31791]
+0x1807baa5f:  call      0x1802154a0
+0x1807baa64:  mov       byte ptr [rip + 0x1f94a34], 1
+0x1807baa6b:  mov       rax, qword ptr [rip + 0x1e3177e]
+0x1807baa72:  mov       rcx, qword ptr [rax + 0xb8]
+0x1807baa79:  mov       rax, qword ptr [rcx]
+0x1807baa7c:  test      rax, rax
+0x1807baa7f:  je        0x1807baaf2
+0x1807baa81:  cmp       byte ptr [rax + 0xd8], 0
+0x1807baa88:  jne       0x1807baabf
+0x1807baa8a:  mov       rax, qword ptr [rip + 0x1e41cff]
+0x1807baa91:  cmp       dword ptr [rax + 0xe0], 0
+0x1807baa98:  jne       0x1807baaa9
+0x1807baa9a:  mov       rcx, rax
+0x1807baa9d:  call      0x1801e18b0
+0x1807baaa2:  mov       rax, qword ptr [rip + 0x1e41ce7]
+0x1807baaa9:  mov       rax, qword ptr [rax + 0xb8]
+0x1807baab0:  cmp       byte ptr [rax], 0
+0x1807baab3:  jne       0x1807baabf
+0x1807baab5:  xor       edx, edx
+0x1807baab7:  mov       rcx, rbx
+0x1807baaba:  call      0x1807bb750   ; <- ItemMouseDragHandler$$StartDrag
+0x1807baabf:  movsd     xmm0, qword ptr [rdi]
+0x1807baac3:  lea       rdx, [rsp + 0x30]
+0x1807baac8:  mov       eax, dword ptr [rdi + 8]
+0x1807baacb:  xor       r8d, r8d
+0x1807baace:  mov       rcx, rbx
+0x1807baad1:  movsd     qword ptr [rsp + 0x30], xmm0
+0x1807baad7:  mov       dword ptr [rsp + 0x38], eax
+0x1807baadb:  call      0x1807b9740   ; <- ItemMouseDragHandler$$Drag
+0x1807baae0:  lea       r11, [rsp + 0x70]
+0x1807baae5:  mov       rbx, qword ptr [r11 + 0x10]
+0x1807baae9:  mov       rsi, qword ptr [r11 + 0x18]
+0x1807baaed:  mov       rsp, r11
+0x1807baaf0:  pop       rdi
+0x1807baaf1:  ret       
+
+===== OnEventPress (0x7BAEC0) =====
+0x1807baec0:  push      rbx
+0x1807baec2:  push      rdi
+0x1807baec3:  sub       rsp, 0x48
+0x1807baec7:  cmp       byte ptr [rip + 0x1f95e30], 0
+0x1807baece:  mov       rdi, rdx
+0x1807baed1:  mov       rbx, rcx
+0x1807baed4:  jne       0x1807baf19
+0x1807baed6:  lea       rcx, [rip + 0x1e786d3]   ; [rip] = Method$System.Linq.Enumerable.First<KeyCode>()
+0x1807baedd:  call      0x1802154a0
+0x1807baee2:  lea       rcx, [rip + 0x1e5946f]
+0x1807baee9:  call      0x1802154a0
+0x1807baeee:  lea       rcx, [rip + 0x1e0b16b]
+0x1807baef5:  call      0x1802154a0
+0x1807baefa:  lea       rcx, [rip + 0x1e1ef8f]   ; [rip] = Method$RenderHandler.RaycastElement<GameItemElement>()
+0x1807baf01:  call      0x1802154a0
+0x1807baf06:  lea       rcx, [rip + 0x1e1e8e3]
+0x1807baf0d:  call      0x1802154a0
+0x1807baf12:  mov       byte ptr [rip + 0x1f95de5], 1
+0x1807baf19:  mov       qword ptr [rsp + 0x68], rbp
+0x1807baf1e:  mov       qword ptr [rsp + 0x70], rsi
+0x1807baf23:  mov       qword ptr [rsp + 0x78], r14
+0x1807baf28:  mov       qword ptr [rsp + 0x40], r15
+0x1807baf2d:  test      rdi, rdi
+0x1807baf30:  je        0x1807bb2fd
+0x1807baf36:  mov       r9d, dword ptr [rbx + 0x40]
+0x1807baf3a:  mov       ecx, 4
+0x1807baf3f:  mov       rdx, qword ptr [rip + 0x1e59412]
+0x1807baf46:  mov       r8, rdi
+0x1807baf49:  call      0x180009830
+0x1807baf4e:  test      al, al
+0x1807baf50:  je        0x1807baf56
+0x1807baf52:  mov       byte ptr [rbx + 0x69], 1
+0x1807baf56:  mov       r9d, dword ptr [rbx + 0x44]
+0x1807baf5a:  mov       ecx, 4
+0x1807baf5f:  mov       rdx, qword ptr [rip + 0x1e593f2]
+0x1807baf66:  mov       r8, rdi
+0x1807baf69:  call      0x180009830
+0x1807baf6e:  test      al, al
+0x1807baf70:  je        0x1807baf76
+0x1807baf72:  mov       byte ptr [rbx + 0x6a], 1
+0x1807baf76:  mov       r9d, dword ptr [rbx + 0x48]
+0x1807baf7a:  mov       ecx, 4
+0x1807baf7f:  mov       rdx, qword ptr [rip + 0x1e593d2]
+0x1807baf86:  mov       r8, rdi
+0x1807baf89:  call      0x180009830
+0x1807baf8e:  test      al, al
+0x1807baf90:  je        0x1807baf96
+0x1807baf92:  mov       byte ptr [rbx + 0x6b], 1
+0x1807baf96:  cmp       byte ptr [rbx + 0x68], 0
+0x1807baf9a:  jne       0x1807bb05d
+0x1807bafa0:  mov       r9d, dword ptr [rbx + 0x24]
+0x1807bafa4:  mov       ecx, 4
+0x1807bafa9:  mov       rdx, qword ptr [rip + 0x1e593a8]
+0x1807bafb0:  mov       r8, rdi
+0x1807bafb3:  call      0x180009830
+0x1807bafb8:  test      al, al
+0x1807bafba:  je        0x1807bb042
+0x1807bafc0:  xor       edx, edx
+0x1807bafc2:  lea       rcx, [rsp + 0x30]
+0x1807bafc7:  call      0x181c9c4d0   ; <- UnityEngine.Input$$get_mousePosition
+0x1807bafcc:  movsd     xmm0, qword ptr [rax]
+0x1807bafd0:  mov       ecx, dword ptr [rax + 8]
+0x1807bafd3:  movsd     qword ptr [rsp + 0x20], xmm0
+0x1807bafd9:  movss     xmm1, dword ptr [rsp + 0x24]
+0x1807bafdf:  movsd     qword ptr [rbx + 0x58], xmm0
+0x1807bafe4:  movss     xmm0, dword ptr [rsp + 0x20]
+0x1807bafea:  movss     dword ptr [rsp + 0x60], xmm0
+0x1807baff0:  movss     dword ptr [rsp + 0x64], xmm1
+0x1807baff6:  mov       dword ptr [rbx + 0x60], ecx
+0x1807baff9:  mov       rcx, qword ptr [rip + 0x1e1e7f0]
+0x1807bb000:  cmp       dword ptr [rcx + 0xe0], 0
+0x1807bb007:  jne       0x1807bb00e
+0x1807bb009:  call      0x1801e18b0
+0x1807bb00e:  mov       r8, qword ptr [rip + 0x1e1ee7b]   ; [rip] = Method$RenderHandler.RaycastElement<GameItemElement>()
+0x1807bb015:  xor       edx, edx
+0x1807bb017:  mov       rcx, qword ptr [rsp + 0x60]
+0x1807bb01c:  call      0x180c11e60   ; <- RenderHandler$$RaycastElement<object>
+0x1807bb021:  lea       rcx, [rbx + 0x50]
+0x1807bb025:  mov       rdx, rax
+0x1807bb028:  mov       qword ptr [rcx], rax
+0x1807bb02b:  call      0x180214ea0
+0x1807bb030:  mov       rdx, qword ptr [rip + 0x1e78579]   ; [rip] = Method$System.Linq.Enumerable.First<KeyCode>()
+0x1807bb037:  mov       rcx, rdi
+0x1807bb03a:  call      0x180bd2a50   ; <- System.Linq.Enumerable$$First<Int32Enum>
+0x1807bb03f:  mov       dword ptr [rbx + 0x64], eax
+0x1807bb042:  mov       r15, qword ptr [rsp + 0x40]
+0x1807bb047:  mov       r14, qword ptr [rsp + 0x78]
+0x1807bb04c:  mov       rsi, qword ptr [rsp + 0x70]
+0x1807bb051:  mov       rbp, qword ptr [rsp + 0x68]
+0x1807bb056:  add       rsp, 0x48
+0x1807bb05a:  pop       rdi
+0x1807bb05b:  pop       rbx
+0x1807bb05c:  ret       
+
+===== OnEventRelease (0x7BB310) =====
+0x1807bb310:  mov       qword ptr [rsp + 8], rbx
+0x1807bb315:  push      rdi
+0x1807bb316:  sub       rsp, 0x20
+0x1807bb31a:  cmp       byte ptr [rip + 0x1f959de], 0
+0x1807bb321:  mov       rdi, rdx
+0x1807bb324:  mov       rbx, rcx
+0x1807bb327:  jne       0x1807bb33c
+0x1807bb329:  lea       rcx, [rip + 0x1e59028]
+0x1807bb330:  call      0x1802154a0
+0x1807bb335:  mov       byte ptr [rip + 0x1f959c3], 1
+0x1807bb33c:  test      rdi, rdi
+0x1807bb33f:  je        0x1807bb41e
+0x1807bb345:  mov       r9d, dword ptr [rbx + 0x40]
+0x1807bb349:  mov       ecx, 4
+0x1807bb34e:  mov       rdx, qword ptr [rip + 0x1e59003]
+0x1807bb355:  mov       r8, rdi
+0x1807bb358:  call      0x180009830
+0x1807bb35d:  test      al, al
+0x1807bb35f:  je        0x1807bb365
+0x1807bb361:  mov       byte ptr [rbx + 0x69], 0
+0x1807bb365:  mov       r9d, dword ptr [rbx + 0x44]
+0x1807bb369:  mov       ecx, 4
+0x1807bb36e:  mov       rdx, qword ptr [rip + 0x1e58fe3]
+0x1807bb375:  mov       r8, rdi
+0x1807bb378:  call      0x180009830
+0x1807bb37d:  test      al, al
+0x1807bb37f:  je        0x1807bb385
+0x1807bb381:  mov       byte ptr [rbx + 0x6a], 0
+0x1807bb385:  mov       r9d, dword ptr [rbx + 0x48]
+0x1807bb389:  mov       ecx, 4
+0x1807bb38e:  mov       rdx, qword ptr [rip + 0x1e58fc3]
+0x1807bb395:  mov       r8, rdi
+0x1807bb398:  call      0x180009830
+0x1807bb39d:  test      al, al
+0x1807bb39f:  je        0x1807bb3a5
+0x1807bb3a1:  mov       byte ptr [rbx + 0x6b], 0
+0x1807bb3a5:  mov       r9d, dword ptr [rbx + 0x64]
+0x1807bb3a9:  mov       ecx, 4
+0x1807bb3ae:  mov       rdx, qword ptr [rip + 0x1e58fa3]
+0x1807bb3b5:  mov       r8, rdi
+0x1807bb3b8:  call      0x180009830
+0x1807bb3bd:  test      al, al
+0x1807bb3bf:  je        0x1807bb3e5
+0x1807bb3c1:  cmp       byte ptr [rbx + 0x68], 0
+0x1807bb3c5:  je        0x1807bb400
+0x1807bb3c7:  mov       rcx, qword ptr [rbx + 0x50]
+0x1807bb3cb:  test      rcx, rcx
+0x1807bb3ce:  je        0x1807bb3db
+0x1807bb3d0:  xor       edx, edx
+0x1807bb3d2:  call      0x18078b310   ; <- GameItemElement$$IsDestroyed
+0x1807bb3d7:  test      al, al
+0x1807bb3d9:  je        0x1807bb3f0
+0x1807bb3db:  xor       edx, edx
+0x1807bb3dd:  mov       rcx, rbx
+0x1807bb3e0:  call      0x1807b9450   ; <- ItemMouseDragHandler$$AbortDrag
+0x1807bb3e5:  mov       rbx, qword ptr [rsp + 0x30]
+0x1807bb3ea:  add       rsp, 0x20
+0x1807bb3ee:  pop       rdi
+0x1807bb3ef:  ret       

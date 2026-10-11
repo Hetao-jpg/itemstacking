@@ -1,0 +1,1627 @@
+### 按名查地址
+  0x766730  GraphUtils$$TryAcceptOnce
+  0x763ae0  GameCharacterRaidInventory$$TryFindOneValidInventorySlot
+  0x77af00  GameGridInventory$$TryFindOneValidInventorySlot_TopMiddle
+  0x77b750  GameGridInventory$$TryFindOneValidInventorySlot
+  0x77be30  GameGridInventory$$TryFindOneValidInventorySlot
+  0x780af0  GameGridScrollableInventory$$TryFindOneValidInventorySlot
+  0x781190  GameGridScrollableInventory$$TryFindOneValidInventorySlot
+  0x7856d0  GameSlotInventory$$TryFindOneValidInventorySlot
+  0x787750  GameGridInventory.<>c$$<TryFindOneValidInventorySlot>b__85_0
+  0x787930  GameGridScrollableInventory.<>c$$<TryFindOneValidInventorySlot>b__96_0
+  0x787b10  GameGridInventory.<>c$$<TryFindOneValidInventorySlot_TopMiddle>b__86_0
+  0x79c6e0  GameItem$$TryFindOneValidInventorySlot
+  0x7a73c0  GridPixelElement$$TryFindOneValidInventorySlot
+  0x7b0cf0  StealPixelElement$$TryFindOneValidInventorySlot
+  0x7befb0  PixelWindow$$TryFindOneValidInventorySlot
+
+
+===== 0x766730 GraphUtils$$TryAcceptOnce =====
+0x180766730:  mov       qword ptr [rsp + 8], rbx
+0x180766735:  mov       qword ptr [rsp + 0x10], rsi
+0x18076673a:  push      rdi
+0x18076673b:  sub       rsp, 0x20
+0x18076673f:  cmp       byte ptr [rip + 0x1fea326], 0
+0x180766746:  mov       ebx, r8d
+0x180766749:  mov       rdi, rdx
+0x18076674c:  mov       rsi, rcx
+0x18076674f:  jne       0x180766764
+0x180766751:  lea       rcx, [rip + 0x1eadf40]
+0x180766758:  call      0x1802154a0
+0x18076675d:  mov       byte ptr [rip + 0x1fea308], 1
+0x180766764:  test      rdi, rdi
+0x180766767:  je        0x1807667c3
+0x180766769:  test      ebx, ebx
+0x18076676b:  jns       0x180766775
+0x18076676d:  mov       ebx, dword ptr [rdi + 0x1f8]
+0x180766773:  test      ebx, ebx
+0x180766775:  jle       0x1807667c3
+0x180766777:  test      rsi, rsi
+0x18076677a:  je        0x1807667d5
+0x18076677c:  mov       rdx, qword ptr [rip + 0x1eadf15]
+0x180766783:  mov       ecx, 4
+0x180766788:  mov       r9, rdi
+0x18076678b:  mov       r8, rsi
+0x18076678e:  call      0x180003fa0
+0x180766793:  test      rax, rax
+0x180766796:  je        0x1807667b1
+0x180766798:  cmp       dword ptr [rax + 0x38], 0
+0x18076679c:  jle       0x1807667b1
+0x18076679e:  xor       r8d, r8d
+0x1807667a1:  mov       edx, ebx
+0x1807667a3:  mov       rcx, rax
+0x1807667a6:  call      0x1807b0020   ; <- SlotMarker$$TryAcceptOnce
+0x1807667ab:  test      eax, eax
+0x1807667ad:  je        0x1807667b1
+0x1807667af:  sub       ebx, eax
+0x1807667b1:  mov       eax, ebx
+0x1807667b3:  mov       rbx, qword ptr [rsp + 0x30]
+0x1807667b8:  mov       rsi, qword ptr [rsp + 0x38]
+0x1807667bd:  add       rsp, 0x20
+0x1807667c1:  pop       rdi
+0x1807667c2:  ret       
+
+===== 0x763AE0 GameCharacterRaidInventory$$TryFindOneValidInventorySlot =====
+0x180763ae0:  mov       qword ptr [rsp + 0x10], rsi
+0x180763ae5:  push      rdi
+0x180763ae6:  sub       rsp, 0x20
+0x180763aea:  cmp       byte ptr [rip + 0x1fecfb4], 0
+0x180763af1:  mov       rdi, rdx
+0x180763af4:  mov       rsi, rcx
+0x180763af7:  jne       0x180763b0c
+0x180763af9:  lea       rcx, [rip + 0x1e81b10]
+0x180763b00:  call      0x1802154a0
+0x180763b05:  mov       byte ptr [rip + 0x1fecf99], 1
+0x180763b0c:  test      rdi, rdi
+0x180763b0f:  je        0x180763ba0
+0x180763b15:  mov       r8, qword ptr [rsi]
+0x180763b18:  mov       rdx, rdi
+0x180763b1b:  mov       rcx, rsi
+0x180763b1e:  mov       rax, qword ptr [r8 + 0x2c8]
+0x180763b25:  mov       r8, qword ptr [r8 + 0x2d0]
+0x180763b2c:  call      rax
+0x180763b2e:  test      al, al
+0x180763b30:  je        0x180763ba0
+0x180763b32:  mov       qword ptr [rsp + 0x30], rbx
+0x180763b37:  mov       rcx, qword ptr [rip + 0x1e81ad2]
+0x180763b3e:  call      0x1801c5300
+0x180763b43:  mov       rbx, rax
+0x180763b46:  test      rax, rax
+0x180763b49:  je        0x180763bad
+0x180763b4b:  xor       edx, edx
+0x180763b4d:  mov       rcx, rax
+0x180763b50:  call      0x1807b01f0   ; <- SlotMarker$$.ctor
+0x180763b55:  lea       rcx, [rbx + 0x10]
+0x180763b59:  mov       rdx, rdi
+0x180763b5c:  mov       qword ptr [rcx], rdi
+0x180763b5f:  call      0x180214ea0
+0x180763b64:  lea       rcx, [rbx + 0x18]
+0x180763b68:  mov       rdx, rsi
+0x180763b6b:  mov       qword ptr [rcx], rsi
+0x180763b6e:  call      0x180214ea0
+0x180763b73:  mov       rdx, qword ptr [rdi + 0x1a0]
+0x180763b7a:  lea       rcx, [rbx + 0x20]
+0x180763b7e:  mov       qword ptr [rcx], rdx
+0x180763b81:  call      0x180214ea0
+0x180763b86:  mov       rax, rbx
+0x180763b89:  mov       dword ptr [rbx + 0x38], 1
+0x180763b90:  mov       rbx, qword ptr [rsp + 0x30]
+0x180763b95:  mov       rsi, qword ptr [rsp + 0x38]
+0x180763b9a:  add       rsp, 0x20
+0x180763b9e:  pop       rdi
+0x180763b9f:  ret       
+
+===== 0x77AF00 GameGridInventory$$TryFindOneValidInventorySlot_TopMiddle =====
+0x18077af00:  mov       qword ptr [rsp + 0x18], rbx
+0x18077af05:  mov       qword ptr [rsp + 0x20], rsi
+0x18077af0a:  mov       qword ptr [rsp + 0x10], rdx
+0x18077af0f:  mov       qword ptr [rsp + 8], rcx
+0x18077af14:  push      rdi
+0x18077af15:  push      r12
+0x18077af17:  push      r13
+0x18077af19:  push      r14
+0x18077af1b:  push      r15
+0x18077af1d:  sub       rsp, 0xa0
+0x18077af24:  movzx     r15d, r8b
+0x18077af28:  mov       r12, rdx
+0x18077af2b:  mov       r14, rcx
+0x18077af2e:  mov       byte ptr [rsp + 0x30], r8b
+0x18077af33:  cmp       byte ptr [rip + 0x1fd5b8c], 0
+0x18077af3a:  jne       0x18077afd7
+0x18077af40:  lea       rcx, [rip + 0x1e66809]
+0x18077af47:  call      0x1802154a0
+0x18077af4c:  lea       rcx, [rip + 0x1e5344d]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077af53:  call      0x1802154a0
+0x18077af58:  lea       rcx, [rip + 0x1e53509]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x18077af5f:  call      0x1802154a0
+0x18077af64:  lea       rcx, [rip + 0x1e535c5]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.get_Current()
+0x18077af6b:  call      0x1802154a0
+0x18077af70:  lea       rcx, [rip + 0x1e9a259]
+0x18077af77:  call      0x1802154a0
+0x18077af7c:  lea       rcx, [rip + 0x1e9a18d]
+0x18077af83:  call      0x1802154a0
+0x18077af88:  lea       rcx, [rip + 0x1e65511]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x18077af8f:  call      0x1802154a0
+0x18077af94:  lea       rcx, [rip + 0x1e658c5]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.Sort()
+0x18077af9b:  call      0x1802154a0
+0x18077afa0:  lea       rcx, [rip + 0x1ec0069]
+0x18077afa7:  call      0x1802154a0
+0x18077afac:  lea       rcx, [rip + 0x1e6a65d]
+0x18077afb3:  call      0x1802154a0
+0x18077afb8:  lea       rcx, [rip + 0x1ec0cf1]   ; [rip] = Method$GameGridInventory.<>c.<TryFindOneValidInventorySlot_TopMiddle>b__86_0()
+0x18077afbf:  call      0x1802154a0
+0x18077afc4:  lea       rcx, [rip + 0x1ebf8bd]
+0x18077afcb:  call      0x1802154a0
+0x18077afd0:  mov       byte ptr [rip + 0x1fd5aef], 1
+0x18077afd7:  test      r12, r12
+0x18077afda:  je        0x18077b724
+0x18077afe0:  xor       edx, edx
+0x18077afe2:  mov       rcx, r12
+0x18077afe5:  call      0x1807984a0   ; <- GameItem$$MaxNumRemove
+0x18077afea:  mov       dword ptr [rsp + 0x34], eax
+0x18077afee:  cmp       eax, 1
+0x18077aff1:  jl        0x18077b71d
+0x18077aff7:  mov       rdi, qword ptr [r14 + 0x198]
+0x18077affe:  mov       rcx, qword ptr [rip + 0x1ebf883]
+0x18077b005:  cmp       dword ptr [rcx + 0xe0], 0
+0x18077b00c:  jne       0x18077b01a
+0x18077b00e:  call      0x1801e18b0
+0x18077b013:  mov       rcx, qword ptr [rip + 0x1ebf86e]
+0x18077b01a:  mov       rax, qword ptr [rcx + 0xb8]
+0x18077b021:  mov       rbx, qword ptr [rax + 0x50]
+0x18077b025:  test      rbx, rbx
+0x18077b028:  jne       0x18077b0a1
+0x18077b02a:  cmp       dword ptr [rcx + 0xe0], ebx
+0x18077b030:  jne       0x18077b03e
+0x18077b032:  call      0x1801e18b0
+0x18077b037:  mov       rcx, qword ptr [rip + 0x1ebf84a]
+0x18077b03e:  mov       rax, qword ptr [rcx + 0xb8]
+0x18077b045:  mov       rsi, qword ptr [rax]
+0x18077b048:  mov       rcx, qword ptr [rip + 0x1e66701]
+0x18077b04f:  call      0x1801c5300
+0x18077b054:  mov       rbx, rax
+0x18077b057:  test      rax, rax
+0x18077b05a:  je        0x18077b724
+0x18077b060:  xor       r9d, r9d
+0x18077b063:  mov       r8, qword ptr [rip + 0x1ec0c46]   ; [rip] = Method$GameGridInventory.<>c.<TryFindOneValidInventorySlot_TopMiddle>b__86_0()
+0x18077b06a:  mov       rdx, rsi
+0x18077b06d:  mov       rcx, rax
+0x18077b070:  call      0x180d271a0   ; <- System.Comparison<object>$$.ctor
+0x18077b075:  mov       rax, qword ptr [rip + 0x1ebf80c]
+0x18077b07c:  mov       rcx, qword ptr [rax + 0xb8]
+0x18077b083:  mov       qword ptr [rcx + 0x50], rbx
+0x18077b087:  mov       rax, qword ptr [rip + 0x1ebf7fa]
+0x18077b08e:  mov       rcx, qword ptr [rax + 0xb8]
+0x18077b095:  add       rcx, 0x50
+0x18077b099:  mov       rdx, rbx
+0x18077b09c:  call      0x180214ea0
+0x18077b0a1:  test      rdi, rdi
+0x18077b0a4:  je        0x18077b724
+0x18077b0aa:  mov       r8, qword ptr [rip + 0x1e657af]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.Sort()
+0x18077b0b1:  mov       rdx, rbx
+0x18077b0b4:  mov       rcx, rdi
+0x18077b0b7:  call      0x180fed1c0   ; <- System.Collections.Generic.List<InstructionList.DebugView.InstructionView>$$Sort
+0x18077b0bc:  mov       rcx, qword ptr [rip + 0x1e6a54d]
+0x18077b0c3:  call      0x1801c5300
+0x18077b0c8:  mov       rsi, rax
+0x18077b0cb:  test      rax, rax
+0x18077b0ce:  je        0x18077b724
+0x18077b0d4:  xor       edx, edx
+0x18077b0d6:  mov       rcx, rax
+0x18077b0d9:  call      0x1807b01f0   ; <- SlotMarker$$.ctor
+0x18077b0de:  mov       qword ptr [rsp + 0x40], rsi
+0x18077b0e3:  lea       rcx, [rsi + 0x10]
+0x18077b0e7:  mov       qword ptr [rcx], r12
+0x18077b0ea:  mov       rdx, r12
+0x18077b0ed:  call      0x180214ea0
+0x18077b0f2:  lea       rcx, [rsi + 0x18]
+0x18077b0f6:  mov       qword ptr [rcx], r14
+0x18077b0f9:  mov       rdx, r14
+0x18077b0fc:  call      0x180214ea0
+0x18077b101:  mov       rdx, qword ptr [r12 + 0x1a0]
+0x18077b109:  lea       rcx, [rsi + 0x20]
+0x18077b10d:  mov       qword ptr [rcx], rdx
+0x18077b110:  call      0x180214ea0
+0x18077b115:  mov       rdx, qword ptr [r14 + 0x198]
+0x18077b11c:  test      rdx, rdx
+0x18077b11f:  je        0x18077b724
+0x18077b125:  mov       r8, qword ptr [rip + 0x1e65374]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x18077b12c:  lea       rcx, [rsp + 0x50]
+0x18077b131:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x18077b136:  movups    xmm0, xmmword ptr [rsp + 0x50]
+0x18077b13b:  movups    xmmword ptr [rsp + 0x78], xmm0
+0x18077b140:  movsd     xmm1, qword ptr [rsp + 0x60]
+0x18077b146:  movsd     qword ptr [rsp + 0x88], xmm1
+0x18077b14f:  xor       r13d, r13d
+0x18077b152:  mov       qword ptr [rsp + 0x50], r13
+0x18077b157:  lea       rbx, [rsp + 0x78]
+0x18077b15c:  mov       qword ptr [rsp + 0x58], rbx
+0x18077b161:  mov       rdx, qword ptr [rip + 0x1e53300]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x18077b168:  lea       rcx, [rsp + 0x78]
+0x18077b16d:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x18077b172:  test      al, al
+0x18077b174:  je        0x18077b229
+0x18077b17a:  mov       rdi, qword ptr [rsp + 0x88]
+0x18077b182:  cmp       r12, rdi
+0x18077b185:  je        0x18077b161
+0x18077b187:  test      rdi, rdi
+0x18077b18a:  je        0x18077b72a
+0x18077b190:  mov       rcx, qword ptr [rdi + 0x70]
+0x18077b194:  test      rcx, rcx
+0x18077b197:  je        0x18077b1c2
+0x18077b199:  mov       r10, qword ptr [rcx + 0x18]
+0x18077b19d:  mov       rax, qword ptr [rcx + 0x28]
+0x18077b1a1:  mov       qword ptr [rsp + 0x28], rax
+0x18077b1a6:  mov       qword ptr [rsp + 0x20], rdi
+0x18077b1ab:  mov       r9, rsi
+0x18077b1ae:  mov       r8, r14
+0x18077b1b1:  mov       rdx, r12
+0x18077b1b4:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077b1b8:  call      r10
+0x18077b1bb:  movzx     eax, al
+0x18077b1be:  test      eax, eax
+0x18077b1c0:  jne       0x18077b1fb
+0x18077b1c2:  mov       rcx, qword ptr [r14 + 0x88]
+0x18077b1c9:  test      rcx, rcx
+0x18077b1cc:  je        0x18077b161
+0x18077b1ce:  mov       r10, qword ptr [rcx + 0x18]
+0x18077b1d2:  mov       rax, qword ptr [rcx + 0x28]
+0x18077b1d6:  mov       qword ptr [rsp + 0x28], rax
+0x18077b1db:  mov       qword ptr [rsp + 0x20], rdi
+0x18077b1e0:  mov       r9, rsi
+0x18077b1e3:  mov       r8, r14
+0x18077b1e6:  mov       rdx, r12
+0x18077b1e9:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077b1ed:  call      r10
+0x18077b1f0:  movzx     eax, al
+0x18077b1f3:  test      eax, eax
+0x18077b1f5:  je        0x18077b161
+0x18077b1fb:  xor       r8d, r8d
+0x18077b1fe:  mov       rdx, r12
+0x18077b201:  mov       rcx, rdi
+0x18077b204:  call      0x18079c6e0   ; <- GameItem$$TryFindOneValidInventorySlot
+0x18077b209:  mov       rdi, rax
+0x18077b20c:  test      rax, rax
+0x18077b20f:  je        0x18077b161
+0x18077b215:  mov       rdx, qword ptr [rip + 0x1e53184]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077b21c:  mov       rcx, rbx
+0x18077b21f:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077b224:  jmp       0x18077b3fd
+0x18077b229:  mov       rdx, qword ptr [rip + 0x1e53170]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077b230:  mov       rcx, rbx
+0x18077b233:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077b238:  jmp       0x18077b277
+0x18077b23a:  mov       rdx, qword ptr [rip + 0x1e5315f]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077b241:  mov       rcx, qword ptr [rsp + 0x58]
+0x18077b246:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077b24b:  mov       rcx, qword ptr [rsp + 0x50]
+0x18077b250:  test      rcx, rcx
+0x18077b253:  jne       0x18077b730
+0x18077b259:  xor       r13d, r13d
+0x18077b25c:  mov       r14, qword ptr [rsp + 0xd0]
+0x18077b264:  mov       rsi, qword ptr [rsp + 0x40]
+0x18077b269:  movzx     r15d, byte ptr [rsp + 0x30]
+0x18077b26f:  mov       r12, qword ptr [rsp + 0xd8]
+0x18077b277:  mov       r8, qword ptr [r14]
+0x18077b27a:  mov       rax, qword ptr [r8 + 0x2c8]
+0x18077b281:  mov       r8, qword ptr [r8 + 0x2d0]
+0x18077b288:  mov       rdx, r12
+0x18077b28b:  mov       rcx, r14
+0x18077b28e:  call      rax
+0x18077b290:  test      al, al
+0x18077b292:  je        0x18077b71d
+0x18077b298:  mov       rdx, qword ptr [r14 + 0x198]
+0x18077b29f:  test      rdx, rdx
+0x18077b2a2:  je        0x18077b724
+0x18077b2a8:  mov       r8, qword ptr [rip + 0x1e651f1]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x18077b2af:  lea       rcx, [rsp + 0x50]
+0x18077b2b4:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x18077b2b9:  movups    xmm0, xmmword ptr [rsp + 0x50]
+0x18077b2be:  movups    xmmword ptr [rsp + 0x78], xmm0
+0x18077b2c3:  movsd     xmm1, qword ptr [rsp + 0x60]
+0x18077b2c9:  movsd     qword ptr [rsp + 0x88], xmm1
+0x18077b2d2:  mov       qword ptr [rsp + 0x50], r13
+0x18077b2d7:  lea       rbx, [rsp + 0x78]
+0x18077b2dc:  mov       qword ptr [rsp + 0x58], rbx
+0x18077b2e1:  mov       rdx, qword ptr [rip + 0x1e53180]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x18077b2e8:  lea       rcx, [rsp + 0x78]
+0x18077b2ed:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x18077b2f2:  test      al, al
+0x18077b2f4:  je        0x18077b41d
+0x18077b2fa:  mov       rdi, qword ptr [rsp + 0x88]
+0x18077b302:  cmp       r12, rdi
+0x18077b305:  je        0x18077b2e1
+0x18077b307:  xor       r8d, r8d
+0x18077b30a:  mov       rdx, rdi
+0x18077b30d:  mov       rcx, r12
+0x18077b310:  call      0x180799120   ; <- GameItem$$MayStack
+0x18077b315:  test      al, al
+0x18077b317:  je        0x18077b2e1
+0x18077b319:  lea       rcx, [rsi + 0x30]
+0x18077b31d:  mov       qword ptr [rcx], rdi
+0x18077b320:  mov       rdx, rdi
+0x18077b323:  call      0x180214ea0
+0x18077b328:  test      rdi, rdi
+0x18077b32b:  je        0x18077b736
+0x18077b331:  xor       edx, edx
+0x18077b333:  mov       rcx, rdi
+0x18077b336:  call      0x180798430   ; <- GameItem$$MaxNumAdd
+0x18077b33b:  mov       edi, eax
+0x18077b33d:  mov       rcx, qword ptr [rip + 0x1ebfccc]
+0x18077b344:  cmp       dword ptr [rcx + 0xe0], 0
+0x18077b34b:  jne       0x18077b352
+0x18077b34d:  call      0x1801e18b0
+0x18077b352:  xor       r8d, r8d
+0x18077b355:  mov       edx, edi
+0x18077b357:  mov       ecx, dword ptr [rsp + 0x34]
+0x18077b35b:  call      0x181435bf0   ; <- System.Math$$Min
+0x18077b360:  mov       dword ptr [rsi + 0x38], eax
+0x18077b363:  cmp       eax, 1
+0x18077b366:  jl        0x18077b2e1
+0x18077b36c:  mov       rcx, qword ptr [r14 + 0x80]
+0x18077b373:  test      rcx, rcx
+0x18077b376:  je        0x18077b399
+0x18077b378:  mov       r10, qword ptr [rcx + 0x18]
+0x18077b37c:  mov       rax, qword ptr [rcx + 0x28]
+0x18077b380:  mov       qword ptr [rsp + 0x20], rax
+0x18077b385:  mov       r9, rsi
+0x18077b388:  mov       r8, r14
+0x18077b38b:  mov       rdx, r12
+0x18077b38e:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077b392:  call      r10
+0x18077b395:  mov       edi, eax
+0x18077b397:  jmp       0x18077b39c
+0x18077b399:  mov       edi, r13d
+0x18077b39c:  mov       rcx, qword ptr [r12 + 0x68]
+0x18077b3a1:  test      rcx, rcx
+0x18077b3a4:  je        0x18077b3c6
+0x18077b3a6:  mov       r10, qword ptr [rcx + 0x18]
+0x18077b3aa:  mov       rax, qword ptr [rcx + 0x28]
+0x18077b3ae:  mov       qword ptr [rsp + 0x20], rax
+0x18077b3b3:  mov       r9, rsi
+0x18077b3b6:  mov       r8, r14
+0x18077b3b9:  mov       rdx, r12
+0x18077b3bc:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077b3c0:  call      r10
+0x18077b3c3:  mov       r13d, eax
+0x18077b3c6:  mov       rcx, qword ptr [rip + 0x1ebfc43]
+0x18077b3cd:  cmp       dword ptr [rcx + 0xe0], 0
+0x18077b3d4:  jne       0x18077b3db
+0x18077b3d6:  call      0x1801e18b0
+0x18077b3db:  xor       r8d, r8d
+0x18077b3de:  mov       edx, r13d
+0x18077b3e1:  mov       ecx, edi
+0x18077b3e3:  call      0x181435960   ; <- System.Math$$Max
+0x18077b3e8:  mov       dword ptr [rsi + 0x3c], eax
+0x18077b3eb:  mov       rdi, rsi
+0x18077b3ee:  mov       rdx, qword ptr [rip + 0x1e52fab]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077b3f5:  mov       rcx, rbx
+0x18077b3f8:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077b3fd:  mov       rax, rdi
+0x18077b400:  lea       r11, [rsp + 0xa0]
+0x18077b408:  mov       rbx, qword ptr [r11 + 0x40]
+0x18077b40c:  mov       rsi, qword ptr [r11 + 0x48]
+0x18077b410:  mov       rsp, r11
+0x18077b413:  pop       r15
+0x18077b415:  pop       r14
+0x18077b417:  pop       r13
+0x18077b419:  pop       r12
+0x18077b41b:  pop       rdi
+0x18077b41c:  ret       
+
+===== 0x77B750 GameGridInventory$$TryFindOneValidInventorySlot =====
+0x18077b750:  mov       qword ptr [rsp + 0x18], rbx
+0x18077b755:  mov       qword ptr [rsp + 0x20], rsi
+0x18077b75a:  mov       qword ptr [rsp + 0x10], rdx
+0x18077b75f:  mov       qword ptr [rsp + 8], rcx
+0x18077b764:  push      rdi
+0x18077b765:  push      r12
+0x18077b767:  push      r13
+0x18077b769:  push      r14
+0x18077b76b:  push      r15
+0x18077b76d:  sub       rsp, 0x90
+0x18077b774:  mov       r13, rdx
+0x18077b777:  mov       rdi, rcx
+0x18077b77a:  mov       byte ptr [rsp + 0x31], r8b
+0x18077b77f:  mov       byte ptr [rsp + 0x30], r8b
+0x18077b784:  cmp       byte ptr [rip + 0x1fd533a], 0
+0x18077b78b:  jne       0x18077b828
+0x18077b791:  lea       rcx, [rip + 0x1e65fb8]
+0x18077b798:  call      0x1802154a0
+0x18077b79d:  lea       rcx, [rip + 0x1e52bfc]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077b7a4:  call      0x1802154a0
+0x18077b7a9:  lea       rcx, [rip + 0x1e52cb8]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x18077b7b0:  call      0x1802154a0
+0x18077b7b5:  lea       rcx, [rip + 0x1e52d74]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.get_Current()
+0x18077b7bc:  call      0x1802154a0
+0x18077b7c1:  lea       rcx, [rip + 0x1e99a08]
+0x18077b7c8:  call      0x1802154a0
+0x18077b7cd:  lea       rcx, [rip + 0x1e9993c]
+0x18077b7d4:  call      0x1802154a0
+0x18077b7d9:  lea       rcx, [rip + 0x1e64cc0]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x18077b7e0:  call      0x1802154a0
+0x18077b7e5:  lea       rcx, [rip + 0x1e65074]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.Sort()
+0x18077b7ec:  call      0x1802154a0
+0x18077b7f1:  lea       rcx, [rip + 0x1ebf818]
+0x18077b7f8:  call      0x1802154a0
+0x18077b7fd:  lea       rcx, [rip + 0x1e69e0c]
+0x18077b804:  call      0x1802154a0
+0x18077b809:  lea       rcx, [rip + 0x1ec03d8]   ; [rip] = Method$GameGridInventory.<>c.<TryFindOneValidInventorySlot>b__85_0()
+0x18077b810:  call      0x1802154a0
+0x18077b815:  lea       rcx, [rip + 0x1ebf06c]
+0x18077b81c:  call      0x1802154a0
+0x18077b821:  mov       byte ptr [rip + 0x1fd529d], 1
+0x18077b828:  test      r13, r13
+0x18077b82b:  je        0x18077be0e
+0x18077b831:  xor       edx, edx
+0x18077b833:  mov       rcx, r13
+0x18077b836:  call      0x1807984a0   ; <- GameItem$$MaxNumRemove
+0x18077b83b:  mov       r12d, eax
+0x18077b83e:  mov       dword ptr [rsp + 0x34], eax
+0x18077b842:  cmp       eax, 1
+0x18077b845:  jl        0x18077be07
+0x18077b84b:  mov       rsi, qword ptr [rdi + 0x198]
+0x18077b852:  mov       rcx, qword ptr [rip + 0x1ebf02f]
+0x18077b859:  cmp       dword ptr [rcx + 0xe0], 0
+0x18077b860:  jne       0x18077b86e
+0x18077b862:  call      0x1801e18b0
+0x18077b867:  mov       rcx, qword ptr [rip + 0x1ebf01a]
+0x18077b86e:  mov       rax, qword ptr [rcx + 0xb8]
+0x18077b875:  mov       rbx, qword ptr [rax + 0x48]
+0x18077b879:  test      rbx, rbx
+0x18077b87c:  jne       0x18077b8f5
+0x18077b87e:  cmp       dword ptr [rcx + 0xe0], ebx
+0x18077b884:  jne       0x18077b892
+0x18077b886:  call      0x1801e18b0
+0x18077b88b:  mov       rcx, qword ptr [rip + 0x1ebeff6]
+0x18077b892:  mov       rax, qword ptr [rcx + 0xb8]
+0x18077b899:  mov       r14, qword ptr [rax]
+0x18077b89c:  mov       rcx, qword ptr [rip + 0x1e65ead]
+0x18077b8a3:  call      0x1801c5300
+0x18077b8a8:  mov       rbx, rax
+0x18077b8ab:  test      rax, rax
+0x18077b8ae:  je        0x18077be0e
+0x18077b8b4:  xor       r9d, r9d
+0x18077b8b7:  mov       r8, qword ptr [rip + 0x1ec032a]   ; [rip] = Method$GameGridInventory.<>c.<TryFindOneValidInventorySlot>b__85_0()
+0x18077b8be:  mov       rdx, r14
+0x18077b8c1:  mov       rcx, rax
+0x18077b8c4:  call      0x180d271a0   ; <- System.Comparison<object>$$.ctor
+0x18077b8c9:  mov       rax, qword ptr [rip + 0x1ebefb8]
+0x18077b8d0:  mov       rcx, qword ptr [rax + 0xb8]
+0x18077b8d7:  mov       qword ptr [rcx + 0x48], rbx
+0x18077b8db:  mov       rax, qword ptr [rip + 0x1ebefa6]
+0x18077b8e2:  mov       rcx, qword ptr [rax + 0xb8]
+0x18077b8e9:  add       rcx, 0x48
+0x18077b8ed:  mov       rdx, rbx
+0x18077b8f0:  call      0x180214ea0
+0x18077b8f5:  test      rsi, rsi
+0x18077b8f8:  je        0x18077be0e
+0x18077b8fe:  mov       r8, qword ptr [rip + 0x1e64f5b]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.Sort()
+0x18077b905:  mov       rdx, rbx
+0x18077b908:  mov       rcx, rsi
+0x18077b90b:  call      0x180fed1c0   ; <- System.Collections.Generic.List<InstructionList.DebugView.InstructionView>$$Sort
+0x18077b910:  mov       rcx, qword ptr [rip + 0x1e69cf9]
+0x18077b917:  call      0x1801c5300
+0x18077b91c:  mov       r15, rax
+0x18077b91f:  test      rax, rax
+0x18077b922:  je        0x18077be0e
+0x18077b928:  xor       edx, edx
+0x18077b92a:  mov       rcx, rax
+0x18077b92d:  call      0x1807b01f0   ; <- SlotMarker$$.ctor
+0x18077b932:  mov       qword ptr [rsp + 0x60], r15
+0x18077b937:  lea       rcx, [r15 + 0x10]
+0x18077b93b:  mov       qword ptr [rcx], r13
+0x18077b93e:  mov       rdx, r13
+0x18077b941:  call      0x180214ea0
+0x18077b946:  lea       rcx, [r15 + 0x18]
+0x18077b94a:  mov       qword ptr [rcx], rdi
+0x18077b94d:  mov       rdx, rdi
+0x18077b950:  call      0x180214ea0
+0x18077b955:  mov       rdx, qword ptr [r13 + 0x1a0]
+0x18077b95c:  lea       rcx, [r15 + 0x20]
+0x18077b960:  mov       qword ptr [rcx], rdx
+0x18077b963:  call      0x180214ea0
+0x18077b968:  mov       rdx, qword ptr [rdi + 0x198]
+0x18077b96f:  test      rdx, rdx
+0x18077b972:  je        0x18077be0e
+0x18077b978:  mov       r8, qword ptr [rip + 0x1e64b21]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x18077b97f:  lea       rcx, [rsp + 0x40]
+0x18077b984:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x18077b989:  movups    xmm0, xmmword ptr [rsp + 0x40]
+0x18077b98e:  movups    xmmword ptr [rsp + 0x68], xmm0
+0x18077b993:  movsd     xmm1, qword ptr [rsp + 0x50]
+0x18077b999:  movsd     qword ptr [rsp + 0x78], xmm1
+0x18077b99f:  xor       esi, esi
+0x18077b9a1:  mov       qword ptr [rsp + 0x40], rsi
+0x18077b9a6:  lea       rbx, [rsp + 0x68]
+0x18077b9ab:  mov       qword ptr [rsp + 0x48], rbx
+0x18077b9b0:  mov       rdx, qword ptr [rip + 0x1e52ab1]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x18077b9b7:  lea       rcx, [rsp + 0x68]
+0x18077b9bc:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x18077b9c1:  test      al, al
+0x18077b9c3:  je        0x18077ba75
+0x18077b9c9:  mov       r14, qword ptr [rsp + 0x78]
+0x18077b9ce:  cmp       r13, r14
+0x18077b9d1:  je        0x18077b9b0
+0x18077b9d3:  test      r14, r14
+0x18077b9d6:  je        0x18077be14
+0x18077b9dc:  mov       rcx, qword ptr [r14 + 0x70]
+0x18077b9e0:  test      rcx, rcx
+0x18077b9e3:  je        0x18077ba0e
+0x18077b9e5:  mov       r10, qword ptr [rcx + 0x18]
+0x18077b9e9:  mov       rax, qword ptr [rcx + 0x28]
+0x18077b9ed:  mov       qword ptr [rsp + 0x28], rax
+0x18077b9f2:  mov       qword ptr [rsp + 0x20], r14
+0x18077b9f7:  mov       r9, r15
+0x18077b9fa:  mov       r8, rdi
+0x18077b9fd:  mov       rdx, r13
+0x18077ba00:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077ba04:  call      r10
+0x18077ba07:  movzx     eax, al
+0x18077ba0a:  test      eax, eax
+0x18077ba0c:  jne       0x18077ba47
+0x18077ba0e:  mov       rcx, qword ptr [rdi + 0x88]
+0x18077ba15:  test      rcx, rcx
+0x18077ba18:  je        0x18077b9b0
+0x18077ba1a:  mov       r10, qword ptr [rcx + 0x18]
+0x18077ba1e:  mov       rax, qword ptr [rcx + 0x28]
+0x18077ba22:  mov       qword ptr [rsp + 0x28], rax
+0x18077ba27:  mov       qword ptr [rsp + 0x20], r14
+0x18077ba2c:  mov       r9, r15
+0x18077ba2f:  mov       r8, rdi
+0x18077ba32:  mov       rdx, r13
+0x18077ba35:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077ba39:  call      r10
+0x18077ba3c:  movzx     eax, al
+0x18077ba3f:  test      eax, eax
+0x18077ba41:  je        0x18077b9b0
+0x18077ba47:  xor       r8d, r8d
+0x18077ba4a:  mov       rdx, r13
+0x18077ba4d:  mov       rcx, r14
+0x18077ba50:  call      0x18079c6e0   ; <- GameItem$$TryFindOneValidInventorySlot
+0x18077ba55:  mov       r14, rax
+0x18077ba58:  test      rax, rax
+0x18077ba5b:  je        0x18077b9b0
+0x18077ba61:  mov       rdx, qword ptr [rip + 0x1e52938]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077ba68:  mov       rcx, rbx
+0x18077ba6b:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077ba70:  jmp       0x18077bc4b
+0x18077ba75:  mov       rdx, qword ptr [rip + 0x1e52924]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077ba7c:  mov       rcx, rbx
+0x18077ba7f:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077ba84:  jmp       0x18077bac1
+0x18077ba86:  mov       rdx, qword ptr [rip + 0x1e52913]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077ba8d:  mov       rcx, qword ptr [rsp + 0x48]
+0x18077ba92:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077ba97:  mov       rcx, qword ptr [rsp + 0x40]
+0x18077ba9c:  test      rcx, rcx
+0x18077ba9f:  jne       0x18077be1a
+0x18077baa5:  xor       esi, esi
+0x18077baa7:  mov       r13, qword ptr [rsp + 0xc8]
+0x18077baaf:  mov       rdi, qword ptr [rsp + 0xc0]
+0x18077bab7:  mov       r15, qword ptr [rsp + 0x60]
+0x18077babc:  mov       r12d, dword ptr [rsp + 0x34]
+0x18077bac1:  mov       r8, qword ptr [rdi]
+0x18077bac4:  mov       rax, qword ptr [r8 + 0x2c8]
+0x18077bacb:  mov       r8, qword ptr [r8 + 0x2d0]
+0x18077bad2:  mov       rdx, r13
+0x18077bad5:  mov       rcx, rdi
+0x18077bad8:  call      rax
+0x18077bada:  test      al, al
+0x18077badc:  je        0x18077be07
+0x18077bae2:  mov       rdx, qword ptr [rdi + 0x198]
+0x18077bae9:  test      rdx, rdx
+0x18077baec:  je        0x18077be0e
+0x18077baf2:  mov       r8, qword ptr [rip + 0x1e649a7]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x18077baf9:  lea       rcx, [rsp + 0x40]
+0x18077bafe:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x18077bb03:  movups    xmm0, xmmword ptr [rsp + 0x40]
+0x18077bb08:  movups    xmmword ptr [rsp + 0x68], xmm0
+0x18077bb0d:  movsd     xmm1, qword ptr [rsp + 0x50]
+0x18077bb13:  movsd     qword ptr [rsp + 0x78], xmm1
+0x18077bb19:  mov       qword ptr [rsp + 0x40], rsi
+0x18077bb1e:  lea       rbx, [rsp + 0x68]
+0x18077bb23:  mov       qword ptr [rsp + 0x48], rbx
+0x18077bb28:  nop       dword ptr [rax + rax]
+0x18077bb30:  mov       rdx, qword ptr [rip + 0x1e52931]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x18077bb37:  lea       rcx, [rsp + 0x68]
+0x18077bb3c:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x18077bb41:  test      al, al
+0x18077bb43:  je        0x18077bc6b
+0x18077bb49:  mov       r14, qword ptr [rsp + 0x78]
+0x18077bb4e:  cmp       r13, r14
+0x18077bb51:  je        0x18077bb30
+0x18077bb53:  xor       r8d, r8d
+0x18077bb56:  mov       rdx, r14
+0x18077bb59:  mov       rcx, r13
+0x18077bb5c:  call      0x180799120   ; <- GameItem$$MayStack
+0x18077bb61:  test      al, al
+0x18077bb63:  je        0x18077bb30
+0x18077bb65:  lea       rcx, [r15 + 0x30]
+0x18077bb69:  mov       qword ptr [rcx], r14
+0x18077bb6c:  mov       rdx, r14
+0x18077bb6f:  call      0x180214ea0
+0x18077bb74:  test      r14, r14
+0x18077bb77:  je        0x18077be20
+0x18077bb7d:  xor       edx, edx
+0x18077bb7f:  mov       rcx, r14
+0x18077bb82:  call      0x180798430   ; <- GameItem$$MaxNumAdd
+0x18077bb87:  mov       r14d, eax
+0x18077bb8a:  mov       rcx, qword ptr [rip + 0x1ebf47f]
+0x18077bb91:  cmp       dword ptr [rcx + 0xe0], 0
+0x18077bb98:  jne       0x18077bb9f
+0x18077bb9a:  call      0x1801e18b0
+0x18077bb9f:  xor       r8d, r8d
+0x18077bba2:  mov       edx, r14d
+0x18077bba5:  mov       ecx, r12d
+0x18077bba8:  call      0x181435bf0   ; <- System.Math$$Min
+0x18077bbad:  mov       dword ptr [r15 + 0x38], eax
+0x18077bbb1:  cmp       eax, 1
+0x18077bbb4:  jl        0x18077bb30
+0x18077bbba:  mov       rcx, qword ptr [rdi + 0x80]
+0x18077bbc1:  test      rcx, rcx
+0x18077bbc4:  je        0x18077bbe8
+0x18077bbc6:  mov       r10, qword ptr [rcx + 0x18]
+0x18077bbca:  mov       rax, qword ptr [rcx + 0x28]
+0x18077bbce:  mov       qword ptr [rsp + 0x20], rax
+0x18077bbd3:  mov       r9, r15
+0x18077bbd6:  mov       r8, rdi
+0x18077bbd9:  mov       rdx, r13
+0x18077bbdc:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077bbe0:  call      r10
+0x18077bbe3:  mov       r14d, eax
+0x18077bbe6:  jmp       0x18077bbeb
+0x18077bbe8:  mov       r14d, esi
+0x18077bbeb:  mov       rcx, qword ptr [r13 + 0x68]
+0x18077bbef:  test      rcx, rcx
+0x18077bbf2:  je        0x18077bc13
+0x18077bbf4:  mov       r10, qword ptr [rcx + 0x18]
+0x18077bbf8:  mov       rax, qword ptr [rcx + 0x28]
+0x18077bbfc:  mov       qword ptr [rsp + 0x20], rax
+0x18077bc01:  mov       r9, r15
+0x18077bc04:  mov       r8, rdi
+0x18077bc07:  mov       rdx, r13
+0x18077bc0a:  mov       rcx, qword ptr [rcx + 0x40]
+0x18077bc0e:  call      r10
+0x18077bc11:  mov       esi, eax
+0x18077bc13:  mov       rcx, qword ptr [rip + 0x1ebf3f6]
+0x18077bc1a:  cmp       dword ptr [rcx + 0xe0], 0
+0x18077bc21:  jne       0x18077bc28
+0x18077bc23:  call      0x1801e18b0
+0x18077bc28:  xor       r8d, r8d
+0x18077bc2b:  mov       edx, esi
+0x18077bc2d:  mov       ecx, r14d
+0x18077bc30:  call      0x181435960   ; <- System.Math$$Max
+0x18077bc35:  mov       dword ptr [r15 + 0x3c], eax
+0x18077bc39:  mov       r14, r15
+0x18077bc3c:  mov       rdx, qword ptr [rip + 0x1e5275d]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x18077bc43:  mov       rcx, rbx
+0x18077bc46:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18077bc4b:  mov       rax, r14
+0x18077bc4e:  lea       r11, [rsp + 0x90]
+0x18077bc56:  mov       rbx, qword ptr [r11 + 0x40]
+0x18077bc5a:  mov       rsi, qword ptr [r11 + 0x48]
+0x18077bc5e:  mov       rsp, r11
+0x18077bc61:  pop       r15
+0x18077bc63:  pop       r14
+0x18077bc65:  pop       r13
+0x18077bc67:  pop       r12
+0x18077bc69:  pop       rdi
+0x18077bc6a:  ret       
+
+===== 0x77BE30 GameGridInventory$$TryFindOneValidInventorySlot =====
+0x18077be30:  xor       r9d, r9d
+0x18077be33:  xor       r8d, r8d
+0x18077be36:  jmp       0x18077b750   ; <- GameGridInventory$$TryFindOneValidInventorySlot
+0x18077be3b:  int3      
+0x18077be3c:  int3      
+0x18077be3d:  int3      
+0x18077be3e:  int3      
+0x18077be3f:  int3      
+
+===== 0x780AF0 GameGridScrollableInventory$$TryFindOneValidInventorySlot =====
+0x180780af0:  mov       qword ptr [rsp + 0x18], rbx
+0x180780af5:  mov       qword ptr [rsp + 0x20], rsi
+0x180780afa:  mov       qword ptr [rsp + 0x10], rdx
+0x180780aff:  mov       qword ptr [rsp + 8], rcx
+0x180780b04:  push      rdi
+0x180780b05:  push      r12
+0x180780b07:  push      r13
+0x180780b09:  push      r14
+0x180780b0b:  push      r15
+0x180780b0d:  sub       rsp, 0x90
+0x180780b14:  mov       r13, rdx
+0x180780b17:  mov       rdi, rcx
+0x180780b1a:  mov       byte ptr [rsp + 0x31], r8b
+0x180780b1f:  mov       byte ptr [rsp + 0x30], r8b
+0x180780b24:  cmp       byte ptr [rip + 0x1fcffbd], 0
+0x180780b2b:  jne       0x180780bbc
+0x180780b31:  lea       rcx, [rip + 0x1e60c18]
+0x180780b38:  call      0x1802154a0
+0x180780b3d:  lea       rcx, [rip + 0x1e4d85c]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x180780b44:  call      0x1802154a0
+0x180780b49:  lea       rcx, [rip + 0x1e4d918]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x180780b50:  call      0x1802154a0
+0x180780b55:  lea       rcx, [rip + 0x1e4d9d4]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.get_Current()
+0x180780b5c:  call      0x1802154a0
+0x180780b61:  lea       rcx, [rip + 0x1e94668]
+0x180780b68:  call      0x1802154a0
+0x180780b6d:  lea       rcx, [rip + 0x1e5f92c]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x180780b74:  call      0x1802154a0
+0x180780b79:  lea       rcx, [rip + 0x1e5fce0]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.Sort()
+0x180780b80:  call      0x1802154a0
+0x180780b85:  lea       rcx, [rip + 0x1eba484]
+0x180780b8c:  call      0x1802154a0
+0x180780b91:  lea       rcx, [rip + 0x1e64a78]
+0x180780b98:  call      0x1802154a0
+0x180780b9d:  lea       rcx, [rip + 0x1ebbd8c]   ; [rip] = Method$GameGridScrollableInventory.<>c.<TryFindOneValidInventorySlot>b__96_0()
+0x180780ba4:  call      0x1802154a0
+0x180780ba9:  lea       rcx, [rip + 0x1eb9ff8]
+0x180780bb0:  call      0x1802154a0
+0x180780bb5:  mov       byte ptr [rip + 0x1fcff2c], 1
+0x180780bbc:  test      r13, r13
+0x180780bbf:  je        0x18078116e
+0x180780bc5:  xor       edx, edx
+0x180780bc7:  mov       rcx, r13
+0x180780bca:  call      0x1807984a0   ; <- GameItem$$MaxNumRemove
+0x180780bcf:  mov       r12d, eax
+0x180780bd2:  mov       dword ptr [rsp + 0x34], eax
+0x180780bd6:  cmp       eax, 1
+0x180780bd9:  jl        0x180781167
+0x180780bdf:  mov       rsi, qword ptr [rdi + 0x170]
+0x180780be6:  mov       rcx, qword ptr [rip + 0x1eb9fbb]
+0x180780bed:  cmp       dword ptr [rcx + 0xe0], 0
+0x180780bf4:  jne       0x180780c02
+0x180780bf6:  call      0x1801e18b0
+0x180780bfb:  mov       rcx, qword ptr [rip + 0x1eb9fa6]
+0x180780c02:  mov       rax, qword ptr [rcx + 0xb8]
+0x180780c09:  mov       rbx, qword ptr [rax + 0x28]
+0x180780c0d:  test      rbx, rbx
+0x180780c10:  jne       0x180780c89
+0x180780c12:  cmp       dword ptr [rcx + 0xe0], ebx
+0x180780c18:  jne       0x180780c26
+0x180780c1a:  call      0x1801e18b0
+0x180780c1f:  mov       rcx, qword ptr [rip + 0x1eb9f82]
+0x180780c26:  mov       rax, qword ptr [rcx + 0xb8]
+0x180780c2d:  mov       r14, qword ptr [rax]
+0x180780c30:  mov       rcx, qword ptr [rip + 0x1e60b19]
+0x180780c37:  call      0x1801c5300
+0x180780c3c:  mov       rbx, rax
+0x180780c3f:  test      rax, rax
+0x180780c42:  je        0x18078116e
+0x180780c48:  xor       r9d, r9d
+0x180780c4b:  mov       r8, qword ptr [rip + 0x1ebbcde]   ; [rip] = Method$GameGridScrollableInventory.<>c.<TryFindOneValidInventorySlot>b__96_0()
+0x180780c52:  mov       rdx, r14
+0x180780c55:  mov       rcx, rax
+0x180780c58:  call      0x180d271a0   ; <- System.Comparison<object>$$.ctor
+0x180780c5d:  mov       rax, qword ptr [rip + 0x1eb9f44]
+0x180780c64:  mov       rcx, qword ptr [rax + 0xb8]
+0x180780c6b:  mov       qword ptr [rcx + 0x28], rbx
+0x180780c6f:  mov       rax, qword ptr [rip + 0x1eb9f32]
+0x180780c76:  mov       rcx, qword ptr [rax + 0xb8]
+0x180780c7d:  add       rcx, 0x28
+0x180780c81:  mov       rdx, rbx
+0x180780c84:  call      0x180214ea0
+0x180780c89:  test      rsi, rsi
+0x180780c8c:  je        0x18078116e
+0x180780c92:  mov       r8, qword ptr [rip + 0x1e5fbc7]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.Sort()
+0x180780c99:  mov       rdx, rbx
+0x180780c9c:  mov       rcx, rsi
+0x180780c9f:  call      0x180fed1c0   ; <- System.Collections.Generic.List<InstructionList.DebugView.InstructionView>$$Sort
+0x180780ca4:  mov       rcx, qword ptr [rip + 0x1e64965]
+0x180780cab:  call      0x1801c5300
+0x180780cb0:  mov       r15, rax
+0x180780cb3:  test      rax, rax
+0x180780cb6:  je        0x18078116e
+0x180780cbc:  xor       edx, edx
+0x180780cbe:  mov       rcx, rax
+0x180780cc1:  call      0x1807b01f0   ; <- SlotMarker$$.ctor
+0x180780cc6:  mov       qword ptr [rsp + 0x60], r15
+0x180780ccb:  lea       rcx, [r15 + 0x10]
+0x180780ccf:  mov       qword ptr [rcx], r13
+0x180780cd2:  mov       rdx, r13
+0x180780cd5:  call      0x180214ea0
+0x180780cda:  lea       rcx, [r15 + 0x18]
+0x180780cde:  mov       qword ptr [rcx], rdi
+0x180780ce1:  mov       rdx, rdi
+0x180780ce4:  call      0x180214ea0
+0x180780ce9:  mov       rdx, qword ptr [r13 + 0x1a0]
+0x180780cf0:  lea       rcx, [r15 + 0x20]
+0x180780cf4:  mov       qword ptr [rcx], rdx
+0x180780cf7:  call      0x180214ea0
+0x180780cfc:  mov       rdx, qword ptr [rdi + 0x170]
+0x180780d03:  test      rdx, rdx
+0x180780d06:  je        0x18078116e
+0x180780d0c:  mov       r8, qword ptr [rip + 0x1e5f78d]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x180780d13:  lea       rcx, [rsp + 0x48]
+0x180780d18:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x180780d1d:  movups    xmm0, xmmword ptr [rsp + 0x48]
+0x180780d22:  movups    xmmword ptr [rsp + 0x68], xmm0
+0x180780d27:  movsd     xmm1, qword ptr [rsp + 0x58]
+0x180780d2d:  movsd     qword ptr [rsp + 0x78], xmm1
+0x180780d33:  xor       esi, esi
+0x180780d35:  mov       qword ptr [rsp + 0x48], rsi
+0x180780d3a:  lea       rbx, [rsp + 0x68]
+0x180780d3f:  mov       qword ptr [rsp + 0x50], rbx
+0x180780d44:  mov       rdx, qword ptr [rip + 0x1e4d71d]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x180780d4b:  lea       rcx, [rsp + 0x68]
+0x180780d50:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x180780d55:  test      al, al
+0x180780d57:  je        0x180780e09
+0x180780d5d:  mov       r14, qword ptr [rsp + 0x78]
+0x180780d62:  cmp       r13, r14
+0x180780d65:  je        0x180780d44
+0x180780d67:  test      r14, r14
+0x180780d6a:  je        0x180781174
+0x180780d70:  mov       rcx, qword ptr [r14 + 0x70]
+0x180780d74:  test      rcx, rcx
+0x180780d77:  je        0x180780da2
+0x180780d79:  mov       r10, qword ptr [rcx + 0x18]
+0x180780d7d:  mov       rax, qword ptr [rcx + 0x28]
+0x180780d81:  mov       qword ptr [rsp + 0x28], rax
+0x180780d86:  mov       qword ptr [rsp + 0x20], r14
+0x180780d8b:  mov       r9, r15
+0x180780d8e:  mov       r8, rdi
+0x180780d91:  mov       rdx, r13
+0x180780d94:  mov       rcx, qword ptr [rcx + 0x40]
+0x180780d98:  call      r10
+0x180780d9b:  movzx     eax, al
+0x180780d9e:  test      eax, eax
+0x180780da0:  jne       0x180780ddb
+0x180780da2:  mov       rcx, qword ptr [rdi + 0x88]
+0x180780da9:  test      rcx, rcx
+0x180780dac:  je        0x180780d44
+0x180780dae:  mov       r10, qword ptr [rcx + 0x18]
+0x180780db2:  mov       rax, qword ptr [rcx + 0x28]
+0x180780db6:  mov       qword ptr [rsp + 0x28], rax
+0x180780dbb:  mov       qword ptr [rsp + 0x20], r14
+0x180780dc0:  mov       r9, r15
+0x180780dc3:  mov       r8, rdi
+0x180780dc6:  mov       rdx, r13
+0x180780dc9:  mov       rcx, qword ptr [rcx + 0x40]
+0x180780dcd:  call      r10
+0x180780dd0:  movzx     eax, al
+0x180780dd3:  test      eax, eax
+0x180780dd5:  je        0x180780d44
+0x180780ddb:  xor       r8d, r8d
+0x180780dde:  mov       rdx, r13
+0x180780de1:  mov       rcx, r14
+0x180780de4:  call      0x18079c6e0   ; <- GameItem$$TryFindOneValidInventorySlot
+0x180780de9:  mov       r14, rax
+0x180780dec:  test      rax, rax
+0x180780def:  je        0x180780d44
+0x180780df5:  mov       rdx, qword ptr [rip + 0x1e4d5a4]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x180780dfc:  mov       rcx, rbx
+0x180780dff:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x180780e04:  jmp       0x180780fdb
+0x180780e09:  mov       rdx, qword ptr [rip + 0x1e4d590]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x180780e10:  mov       rcx, rbx
+0x180780e13:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x180780e18:  jmp       0x180780e55
+0x180780e1a:  mov       rdx, qword ptr [rip + 0x1e4d57f]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x180780e21:  mov       rcx, qword ptr [rsp + 0x50]
+0x180780e26:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x180780e2b:  mov       rcx, qword ptr [rsp + 0x48]
+0x180780e30:  test      rcx, rcx
+0x180780e33:  jne       0x18078117a
+0x180780e39:  xor       esi, esi
+0x180780e3b:  mov       rdi, qword ptr [rsp + 0xc0]
+0x180780e43:  mov       r15, qword ptr [rsp + 0x60]
+0x180780e48:  mov       r13, qword ptr [rsp + 0xc8]
+0x180780e50:  mov       r12d, dword ptr [rsp + 0x34]
+0x180780e55:  mov       r8, qword ptr [rdi]
+0x180780e58:  mov       rax, qword ptr [r8 + 0x2c8]
+0x180780e5f:  mov       r8, qword ptr [r8 + 0x2d0]
+0x180780e66:  mov       rdx, r13
+0x180780e69:  mov       rcx, rdi
+0x180780e6c:  call      rax
+0x180780e6e:  test      al, al
+0x180780e70:  je        0x180781167
+0x180780e76:  mov       rdx, qword ptr [rdi + 0x170]
+0x180780e7d:  test      rdx, rdx
+0x180780e80:  je        0x18078116e
+0x180780e86:  mov       r8, qword ptr [rip + 0x1e5f613]   ; [rip] = Method$System.Collections.Generic.List<GameItem>.GetEnumerator()
+0x180780e8d:  lea       rcx, [rsp + 0x48]
+0x180780e92:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x180780e97:  movups    xmm0, xmmword ptr [rsp + 0x48]
+0x180780e9c:  movups    xmmword ptr [rsp + 0x68], xmm0
+0x180780ea1:  movsd     xmm1, qword ptr [rsp + 0x58]
+0x180780ea7:  movsd     qword ptr [rsp + 0x78], xmm1
+0x180780ead:  mov       qword ptr [rsp + 0x48], rsi
+0x180780eb2:  lea       rbx, [rsp + 0x68]
+0x180780eb7:  mov       qword ptr [rsp + 0x50], rbx
+0x180780ebc:  nop       dword ptr [rax]
+0x180780ec0:  mov       rdx, qword ptr [rip + 0x1e4d5a1]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.MoveNext()
+0x180780ec7:  lea       rcx, [rsp + 0x68]
+0x180780ecc:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x180780ed1:  test      al, al
+0x180780ed3:  je        0x180780ffb
+0x180780ed9:  mov       r14, qword ptr [rsp + 0x78]
+0x180780ede:  cmp       r13, r14
+0x180780ee1:  je        0x180780ec0
+0x180780ee3:  xor       r8d, r8d
+0x180780ee6:  mov       rdx, r14
+0x180780ee9:  mov       rcx, r13
+0x180780eec:  call      0x180799120   ; <- GameItem$$MayStack
+0x180780ef1:  test      al, al
+0x180780ef3:  je        0x180780ec0
+0x180780ef5:  lea       rcx, [r15 + 0x30]
+0x180780ef9:  mov       qword ptr [rcx], r14
+0x180780efc:  mov       rdx, r14
+0x180780eff:  call      0x180214ea0
+0x180780f04:  test      r14, r14
+0x180780f07:  je        0x180781180
+0x180780f0d:  xor       edx, edx
+0x180780f0f:  mov       rcx, r14
+0x180780f12:  call      0x180798430   ; <- GameItem$$MaxNumAdd
+0x180780f17:  mov       r14d, eax
+0x180780f1a:  mov       rcx, qword ptr [rip + 0x1eba0ef]
+0x180780f21:  cmp       dword ptr [rcx + 0xe0], 0
+0x180780f28:  jne       0x180780f2f
+0x180780f2a:  call      0x1801e18b0
+0x180780f2f:  xor       r8d, r8d
+0x180780f32:  mov       edx, r14d
+0x180780f35:  mov       ecx, r12d
+0x180780f38:  call      0x181435bf0   ; <- System.Math$$Min
+0x180780f3d:  mov       dword ptr [r15 + 0x38], eax
+0x180780f41:  cmp       eax, 1
+0x180780f44:  jl        0x180780ec0
+0x180780f4a:  mov       rcx, qword ptr [rdi + 0x80]
+0x180780f51:  test      rcx, rcx
+0x180780f54:  je        0x180780f78
+0x180780f56:  mov       r10, qword ptr [rcx + 0x18]
+0x180780f5a:  mov       rax, qword ptr [rcx + 0x28]
+0x180780f5e:  mov       qword ptr [rsp + 0x20], rax
+0x180780f63:  mov       r9, r15
+0x180780f66:  mov       r8, rdi
+0x180780f69:  mov       rdx, r13
+0x180780f6c:  mov       rcx, qword ptr [rcx + 0x40]
+0x180780f70:  call      r10
+0x180780f73:  mov       r14d, eax
+0x180780f76:  jmp       0x180780f7b
+0x180780f78:  mov       r14d, esi
+0x180780f7b:  mov       rcx, qword ptr [r13 + 0x68]
+0x180780f7f:  test      rcx, rcx
+0x180780f82:  je        0x180780fa3
+0x180780f84:  mov       r10, qword ptr [rcx + 0x18]
+0x180780f88:  mov       rax, qword ptr [rcx + 0x28]
+0x180780f8c:  mov       qword ptr [rsp + 0x20], rax
+0x180780f91:  mov       r9, r15
+0x180780f94:  mov       r8, rdi
+0x180780f97:  mov       rdx, r13
+0x180780f9a:  mov       rcx, qword ptr [rcx + 0x40]
+0x180780f9e:  call      r10
+0x180780fa1:  mov       esi, eax
+0x180780fa3:  mov       rcx, qword ptr [rip + 0x1eba066]
+0x180780faa:  cmp       dword ptr [rcx + 0xe0], 0
+0x180780fb1:  jne       0x180780fb8
+0x180780fb3:  call      0x1801e18b0
+0x180780fb8:  xor       r8d, r8d
+0x180780fbb:  mov       edx, esi
+0x180780fbd:  mov       ecx, r14d
+0x180780fc0:  call      0x181435960   ; <- System.Math$$Max
+0x180780fc5:  mov       dword ptr [r15 + 0x3c], eax
+0x180780fc9:  mov       r14, r15
+0x180780fcc:  mov       rdx, qword ptr [rip + 0x1e4d3cd]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GameItem>.Dispose()
+0x180780fd3:  mov       rcx, rbx
+0x180780fd6:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x180780fdb:  mov       rax, r14
+0x180780fde:  lea       r11, [rsp + 0x90]
+0x180780fe6:  mov       rbx, qword ptr [r11 + 0x40]
+0x180780fea:  mov       rsi, qword ptr [r11 + 0x48]
+0x180780fee:  mov       rsp, r11
+0x180780ff1:  pop       r15
+0x180780ff3:  pop       r14
+0x180780ff5:  pop       r13
+0x180780ff7:  pop       r12
+0x180780ff9:  pop       rdi
+0x180780ffa:  ret       
+
+===== 0x781190 GameGridScrollableInventory$$TryFindOneValidInventorySlot =====
+0x180781190:  xor       r9d, r9d
+0x180781193:  xor       r8d, r8d
+0x180781196:  jmp       0x180780af0   ; <- GameGridScrollableInventory$$TryFindOneValidInventorySlot
+0x18078119b:  int3      
+0x18078119c:  int3      
+0x18078119d:  int3      
+0x18078119e:  int3      
+0x18078119f:  int3      
+
+===== 0x7856D0 GameSlotInventory$$TryFindOneValidInventorySlot =====
+0x1807856d0:  push      rbx
+0x1807856d2:  push      rdi
+0x1807856d3:  sub       rsp, 0x48
+0x1807856d7:  cmp       byte ptr [rip + 0x1fcb437], 0
+0x1807856de:  mov       rbx, rdx
+0x1807856e1:  mov       rdi, rcx
+0x1807856e4:  jne       0x180785711
+0x1807856e6:  lea       rcx, [rip + 0x1e8fa23]
+0x1807856ed:  call      0x1802154a0
+0x1807856f2:  lea       rcx, [rip + 0x1eb5917]
+0x1807856f9:  call      0x1802154a0
+0x1807856fe:  lea       rcx, [rip + 0x1e5ff0b]
+0x180785705:  call      0x1802154a0
+0x18078570a:  mov       byte ptr [rip + 0x1fcb404], 1
+0x180785711:  mov       qword ptr [rsp + 0x60], rbp
+0x180785716:  mov       qword ptr [rsp + 0x68], rsi
+0x18078571b:  mov       qword ptr [rsp + 0x70], r12
+0x180785720:  mov       qword ptr [rsp + 0x40], r15
+0x180785725:  test      rbx, rbx
+0x180785728:  je        0x180785a58
+0x18078572e:  xor       edx, edx
+0x180785730:  mov       rcx, rbx
+0x180785733:  call      0x1807984a0   ; <- GameItem$$MaxNumRemove
+0x180785738:  mov       r15d, eax
+0x18078573b:  cmp       eax, 1
+0x18078573e:  jl        0x180785a51
+0x180785744:  mov       rcx, qword ptr [rip + 0x1e5fec5]
+0x18078574b:  call      0x1801c5300
+0x180785750:  mov       rsi, rax
+0x180785753:  test      rax, rax
+0x180785756:  je        0x180785a58
+0x18078575c:  xor       edx, edx
+0x18078575e:  mov       rcx, rax
+0x180785761:  call      0x1807b01f0   ; <- SlotMarker$$.ctor
+0x180785766:  lea       rcx, [rsi + 0x10]
+0x18078576a:  mov       rdx, rbx
+0x18078576d:  mov       qword ptr [rcx], rbx
+0x180785770:  call      0x180214ea0
+0x180785775:  lea       rcx, [rsi + 0x18]
+0x180785779:  mov       rdx, rdi
+0x18078577c:  mov       qword ptr [rcx], rdi
+0x18078577f:  call      0x180214ea0
+0x180785784:  mov       rdx, qword ptr [rbx + 0x1a0]
+0x18078578b:  lea       rcx, [rsi + 0x20]
+0x18078578f:  mov       qword ptr [rcx], rdx
+0x180785792:  call      0x180214ea0
+0x180785797:  mov       rdx, qword ptr [rdi + 0x188]
+0x18078579e:  cmp       rbx, rdx
+0x1807857a1:  je        0x180785842
+0x1807857a7:  test      rdx, rdx
+0x1807857aa:  je        0x180785842
+0x1807857b0:  mov       rcx, qword ptr [rdx + 0x70]
+0x1807857b4:  test      rcx, rcx
+0x1807857b7:  je        0x1807857e2
+0x1807857b9:  mov       rax, qword ptr [rcx + 0x28]
+0x1807857bd:  mov       r9, rsi
+0x1807857c0:  mov       r10, qword ptr [rcx + 0x18]
+0x1807857c4:  mov       r8, rdi
+0x1807857c7:  mov       rcx, qword ptr [rcx + 0x40]
+0x1807857cb:  mov       qword ptr [rsp + 0x28], rax
+0x1807857d0:  mov       qword ptr [rsp + 0x20], rdx
+0x1807857d5:  mov       rdx, rbx
+0x1807857d8:  call      r10
+0x1807857db:  movzx     eax, al
+0x1807857de:  test      eax, eax
+0x1807857e0:  jne       0x18078581e
+0x1807857e2:  mov       rcx, qword ptr [rdi + 0x88]
+0x1807857e9:  test      rcx, rcx
+0x1807857ec:  je        0x180785842
+0x1807857ee:  mov       rax, qword ptr [rcx + 0x28]
+0x1807857f2:  mov       r9, rsi
+0x1807857f5:  mov       rdx, qword ptr [rdi + 0x188]
+0x1807857fc:  mov       r8, rdi
+0x1807857ff:  mov       r10, qword ptr [rcx + 0x18]
+0x180785803:  mov       rcx, qword ptr [rcx + 0x40]
+0x180785807:  mov       qword ptr [rsp + 0x28], rax
+0x18078580c:  mov       qword ptr [rsp + 0x20], rdx
+0x180785811:  mov       rdx, rbx
+0x180785814:  call      r10
+0x180785817:  movzx     eax, al
+0x18078581a:  test      eax, eax
+0x18078581c:  je        0x180785842
+0x18078581e:  mov       rcx, qword ptr [rdi + 0x188]
+0x180785825:  test      rcx, rcx
+0x180785828:  je        0x180785a58
+0x18078582e:  xor       r8d, r8d
+0x180785831:  mov       rdx, rbx
+0x180785834:  call      0x18079c6e0   ; <- GameItem$$TryFindOneValidInventorySlot
+0x180785839:  test      rax, rax
+0x18078583c:  jne       0x180785991
+0x180785842:  mov       rax, qword ptr [rdi + 0x188]
+0x180785849:  test      rax, rax
+0x18078584c:  je        0x180785857
+0x18078584e:  cmp       rbx, rax
+0x180785851:  jne       0x180785a51
+0x180785857:  mov       r8, qword ptr [rdi]
+0x18078585a:  mov       rdx, rbx
+0x18078585d:  mov       rcx, rdi
+0x180785860:  mov       rax, qword ptr [r8 + 0x2c8]
+0x180785867:  mov       r8, qword ptr [r8 + 0x2d0]
+0x18078586e:  call      rax
+0x180785870:  test      al, al
+0x180785872:  je        0x180785a51
+0x180785878:  mov       rcx, qword ptr [rdi + 0x188]
+0x18078587f:  xor       r12d, r12d
+0x180785882:  cmp       rbx, rcx
+0x180785885:  je        0x1807859ac
+0x18078588b:  test      rcx, rcx
+0x18078588e:  je        0x1807859ac
+0x180785894:  xor       r8d, r8d
+0x180785897:  mov       rdx, rbx
+0x18078589a:  call      0x180799120   ; <- GameItem$$MayStack
+0x18078589f:  movzx     eax, al
+0x1807858a2:  test      eax, eax
+0x1807858a4:  je        0x1807859ac
+0x1807858aa:  mov       rdx, qword ptr [rdi + 0x188]
+0x1807858b1:  lea       rcx, [rsi + 0x30]
+0x1807858b5:  mov       qword ptr [rcx], rdx
+0x1807858b8:  call      0x180214ea0
+0x1807858bd:  mov       rcx, qword ptr [rdi + 0x188]
+0x1807858c4:  test      rcx, rcx
+0x1807858c7:  je        0x180785a58
+0x1807858cd:  xor       edx, edx
+0x1807858cf:  mov       qword ptr [rsp + 0x78], r14
+0x1807858d4:  call      0x180798430   ; <- GameItem$$MaxNumAdd
+0x1807858d9:  mov       rcx, qword ptr [rip + 0x1eb5730]
+0x1807858e0:  mov       ebp, eax
+0x1807858e2:  cmp       dword ptr [rcx + 0xe0], r12d
+0x1807858e9:  jne       0x1807858f0
+0x1807858eb:  call      0x1801e18b0
+0x1807858f0:  xor       r8d, r8d
+0x1807858f3:  mov       edx, ebp
+0x1807858f5:  mov       ecx, r15d
+0x1807858f8:  call      0x181435bf0   ; <- System.Math$$Min
+0x1807858fd:  mov       dword ptr [rsi + 0x38], eax
+0x180785900:  mov       rcx, qword ptr [rdi + 0x80]
+0x180785907:  test      rcx, rcx
+0x18078590a:  je        0x18078592e
+0x18078590c:  mov       rax, qword ptr [rcx + 0x28]
+0x180785910:  mov       r9, rsi
+0x180785913:  mov       r10, qword ptr [rcx + 0x18]
+0x180785917:  mov       r8, rdi
+0x18078591a:  mov       rcx, qword ptr [rcx + 0x40]
+0x18078591e:  mov       rdx, rbx
+0x180785921:  mov       qword ptr [rsp + 0x20], rax
+0x180785926:  call      r10
+0x180785929:  mov       r14d, eax
+0x18078592c:  jmp       0x180785931
+0x18078592e:  mov       r14d, r12d
+0x180785931:  mov       rcx, qword ptr [rbx + 0x68]
+0x180785935:  test      rcx, rcx
+0x180785938:  je        0x18078595b
+0x18078593a:  mov       rax, qword ptr [rcx + 0x28]
+0x18078593e:  mov       r9, rsi
+0x180785941:  mov       r10, qword ptr [rcx + 0x18]
+0x180785945:  mov       r8, rdi
+0x180785948:  mov       rcx, qword ptr [rcx + 0x40]
+0x18078594c:  mov       rdx, rbx
+0x18078594f:  mov       qword ptr [rsp + 0x20], rax
+0x180785954:  call      r10
+0x180785957:  mov       ebp, eax
+0x180785959:  jmp       0x18078595e
+0x18078595b:  mov       ebp, r12d
+0x18078595e:  mov       rcx, qword ptr [rip + 0x1eb56ab]
+0x180785965:  cmp       dword ptr [rcx + 0xe0], r12d
+0x18078596c:  jne       0x180785973
+0x18078596e:  call      0x1801e18b0
+0x180785973:  xor       r8d, r8d
+0x180785976:  mov       edx, ebp
+0x180785978:  mov       ecx, r14d
+0x18078597b:  call      0x181435960   ; <- System.Math$$Max
+0x180785980:  mov       r14, qword ptr [rsp + 0x78]
+0x180785985:  mov       dword ptr [rsi + 0x3c], eax
+0x180785988:  cmp       dword ptr [rsi + 0x38], r12d
+0x18078598c:  jle       0x1807859ac
+0x18078598e:  mov       rax, rsi
+0x180785991:  mov       r15, qword ptr [rsp + 0x40]
+0x180785996:  mov       r12, qword ptr [rsp + 0x70]
+0x18078599b:  mov       rsi, qword ptr [rsp + 0x68]
+0x1807859a0:  mov       rbp, qword ptr [rsp + 0x60]
+0x1807859a5:  add       rsp, 0x48
+0x1807859a9:  pop       rdi
+0x1807859aa:  pop       rbx
+0x1807859ab:  ret       
+
+===== 0x787750 GameGridInventory.<>c$$<TryFindOneValidInventorySlot>b__85_0 =====
+0x180787750:  mov       qword ptr [rsp + 0x10], rbx
+0x180787755:  push      rdi
+0x180787756:  sub       rsp, 0x20
+0x18078775a:  cmp       byte ptr [rip + 0x1fc9368], 0
+0x180787761:  mov       rdi, r8
+0x180787764:  mov       rbx, rdx
+0x180787767:  jne       0x18078777c
+0x180787769:  lea       rcx, [rip + 0x1e8d9a0]
+0x180787770:  call      0x1802154a0
+0x180787775:  mov       byte ptr [rip + 0x1fc934d], 1
+0x18078777c:  mov       qword ptr [rsp + 0x30], rsi
+0x180787781:  test      rbx, rbx
+0x180787784:  je        0x18078791f
+0x18078778a:  mov       r8, qword ptr [rbx + 0x1a0]
+0x180787791:  test      r8, r8
+0x180787794:  je        0x18078791f
+0x18078779a:  mov       rdx, qword ptr [rip + 0x1e8d96f]
+0x1807877a1:  xor       ecx, ecx
+0x1807877a3:  call      0x180002bd0
+0x1807877a8:  mov       esi, eax
+0x1807877aa:  test      rdi, rdi
+0x1807877ad:  je        0x18078791f
+0x1807877b3:  mov       r8, qword ptr [rdi + 0x1a0]
+0x1807877ba:  test      r8, r8
+0x1807877bd:  je        0x18078791f
+0x1807877c3:  mov       rdx, qword ptr [rip + 0x1e8d946]
+0x1807877ca:  xor       ecx, ecx
+0x1807877cc:  call      0x180002bd0
+0x1807877d1:  cmp       esi, eax
+0x1807877d3:  jne       0x18078782f
+0x1807877d5:  mov       r8, qword ptr [rbx + 0x1a0]
+0x1807877dc:  test      r8, r8
+0x1807877df:  je        0x18078791f
+0x1807877e5:  mov       rdx, qword ptr [rip + 0x1e8d924]
+0x1807877ec:  mov       ecx, 1
+0x1807877f1:  call      0x180002bd0
+0x1807877f6:  mov       r8, qword ptr [rdi + 0x1a0]
+0x1807877fd:  mov       esi, eax
+0x1807877ff:  test      r8, r8
+0x180787802:  je        0x18078791f
+0x180787808:  mov       rdx, qword ptr [rip + 0x1e8d901]
+0x18078780f:  mov       ecx, 1
+0x180787814:  call      0x180002bd0
+0x180787819:  cmp       esi, eax
+0x18078781b:  jne       0x18078782f
+0x18078781d:  xor       eax, eax
+0x18078781f:  mov       rsi, qword ptr [rsp + 0x30]
+0x180787824:  mov       rbx, qword ptr [rsp + 0x38]
+0x180787829:  add       rsp, 0x20
+0x18078782d:  pop       rdi
+0x18078782e:  ret       
+
+===== 0x787930 GameGridScrollableInventory.<>c$$<TryFindOneValidInventorySlot>b__96_0 =====
+0x180787930:  mov       qword ptr [rsp + 0x10], rbx
+0x180787935:  push      rdi
+0x180787936:  sub       rsp, 0x20
+0x18078793a:  cmp       byte ptr [rip + 0x1fc91ad], 0
+0x180787941:  mov       rdi, r8
+0x180787944:  mov       rbx, rdx
+0x180787947:  jne       0x18078795c
+0x180787949:  lea       rcx, [rip + 0x1e8d7c0]
+0x180787950:  call      0x1802154a0
+0x180787955:  mov       byte ptr [rip + 0x1fc9192], 1
+0x18078795c:  mov       qword ptr [rsp + 0x30], rsi
+0x180787961:  test      rbx, rbx
+0x180787964:  je        0x180787aff
+0x18078796a:  mov       r8, qword ptr [rbx + 0x1a0]
+0x180787971:  test      r8, r8
+0x180787974:  je        0x180787aff
+0x18078797a:  mov       rdx, qword ptr [rip + 0x1e8d78f]
+0x180787981:  xor       ecx, ecx
+0x180787983:  call      0x180002bd0
+0x180787988:  mov       esi, eax
+0x18078798a:  test      rdi, rdi
+0x18078798d:  je        0x180787aff
+0x180787993:  mov       r8, qword ptr [rdi + 0x1a0]
+0x18078799a:  test      r8, r8
+0x18078799d:  je        0x180787aff
+0x1807879a3:  mov       rdx, qword ptr [rip + 0x1e8d766]
+0x1807879aa:  xor       ecx, ecx
+0x1807879ac:  call      0x180002bd0
+0x1807879b1:  cmp       esi, eax
+0x1807879b3:  jne       0x180787a0f
+0x1807879b5:  mov       r8, qword ptr [rbx + 0x1a0]
+0x1807879bc:  test      r8, r8
+0x1807879bf:  je        0x180787aff
+0x1807879c5:  mov       rdx, qword ptr [rip + 0x1e8d744]
+0x1807879cc:  mov       ecx, 1
+0x1807879d1:  call      0x180002bd0
+0x1807879d6:  mov       r8, qword ptr [rdi + 0x1a0]
+0x1807879dd:  mov       esi, eax
+0x1807879df:  test      r8, r8
+0x1807879e2:  je        0x180787aff
+0x1807879e8:  mov       rdx, qword ptr [rip + 0x1e8d721]
+0x1807879ef:  mov       ecx, 1
+0x1807879f4:  call      0x180002bd0
+0x1807879f9:  cmp       esi, eax
+0x1807879fb:  jne       0x180787a0f
+0x1807879fd:  xor       eax, eax
+0x1807879ff:  mov       rsi, qword ptr [rsp + 0x30]
+0x180787a04:  mov       rbx, qword ptr [rsp + 0x38]
+0x180787a09:  add       rsp, 0x20
+0x180787a0d:  pop       rdi
+0x180787a0e:  ret       
+
+===== 0x787B10 GameGridInventory.<>c$$<TryFindOneValidInventorySlot_TopMiddle>b__86_0 =====
+0x180787b10:  mov       qword ptr [rsp + 0x10], rbx
+0x180787b15:  push      rdi
+0x180787b16:  sub       rsp, 0x20
+0x180787b1a:  cmp       byte ptr [rip + 0x1fc8fa9], 0
+0x180787b21:  mov       rdi, r8
+0x180787b24:  mov       rbx, rdx
+0x180787b27:  jne       0x180787b3c
+0x180787b29:  lea       rcx, [rip + 0x1e8d5e0]
+0x180787b30:  call      0x1802154a0
+0x180787b35:  mov       byte ptr [rip + 0x1fc8f8e], 1
+0x180787b3c:  mov       qword ptr [rsp + 0x30], rsi
+0x180787b41:  test      rbx, rbx
+0x180787b44:  je        0x180787cd9
+0x180787b4a:  mov       r8, qword ptr [rbx + 0x1a0]
+0x180787b51:  test      r8, r8
+0x180787b54:  je        0x180787cd9
+0x180787b5a:  mov       rdx, qword ptr [rip + 0x1e8d5af]
+0x180787b61:  mov       ecx, 1
+0x180787b66:  call      0x180002bd0
+0x180787b6b:  mov       esi, eax
+0x180787b6d:  test      rdi, rdi
+0x180787b70:  je        0x180787cd9
+0x180787b76:  mov       r8, qword ptr [rdi + 0x1a0]
+0x180787b7d:  test      r8, r8
+0x180787b80:  je        0x180787cd9
+0x180787b86:  mov       rdx, qword ptr [rip + 0x1e8d583]
+0x180787b8d:  mov       ecx, 1
+0x180787b92:  call      0x180002bd0
+0x180787b97:  cmp       esi, eax
+0x180787b99:  jne       0x180787bef
+0x180787b9b:  mov       r8, qword ptr [rbx + 0x1a0]
+0x180787ba2:  test      r8, r8
+0x180787ba5:  je        0x180787cd9
+0x180787bab:  mov       rdx, qword ptr [rip + 0x1e8d55e]
+0x180787bb2:  xor       ecx, ecx
+0x180787bb4:  call      0x180002bd0
+0x180787bb9:  mov       r8, qword ptr [rdi + 0x1a0]
+0x180787bc0:  mov       esi, eax
+0x180787bc2:  test      r8, r8
+0x180787bc5:  je        0x180787cd9
+0x180787bcb:  mov       rdx, qword ptr [rip + 0x1e8d53e]
+0x180787bd2:  xor       ecx, ecx
+0x180787bd4:  call      0x180002bd0
+0x180787bd9:  cmp       esi, eax
+0x180787bdb:  jne       0x180787bef
+0x180787bdd:  xor       eax, eax
+0x180787bdf:  mov       rsi, qword ptr [rsp + 0x30]
+0x180787be4:  mov       rbx, qword ptr [rsp + 0x38]
+0x180787be9:  add       rsp, 0x20
+0x180787bed:  pop       rdi
+0x180787bee:  ret       
+
+===== 0x79C6E0 GameItem$$TryFindOneValidInventorySlot =====
+0x18079c6e0:  mov       qword ptr [rsp + 8], rbx
+0x18079c6e5:  mov       qword ptr [rsp + 0x10], rsi
+0x18079c6ea:  mov       qword ptr [rsp + 0x18], rdi
+0x18079c6ef:  push      r14
+0x18079c6f1:  sub       rsp, 0x60
+0x18079c6f5:  mov       rsi, rdx
+0x18079c6f8:  mov       rbx, rcx
+0x18079c6fb:  cmp       byte ptr [rip + 0x1fb447c], 0
+0x18079c702:  jne       0x18079c747
+0x18079c704:  lea       rcx, [rip + 0x1e3284d]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.Dispose()
+0x18079c70b:  call      0x1802154a0
+0x18079c710:  lea       rcx, [rip + 0x1e32909]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.MoveNext()
+0x18079c717:  call      0x1802154a0
+0x18079c71c:  lea       rcx, [rip + 0x1e329c5]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.get_Current()
+0x18079c723:  call      0x1802154a0
+0x18079c728:  lea       rcx, [rip + 0x1e77f69]
+0x18079c72f:  call      0x1802154a0
+0x18079c734:  lea       rcx, [rip + 0x1e465e5]   ; [rip] = Method$System.Collections.Generic.List<GraphNodeStorage>.GetEnumerator()
+0x18079c73b:  call      0x1802154a0
+0x18079c740:  mov       byte ptr [rip + 0x1fb4437], 1
+0x18079c747:  mov       rdx, qword ptr [rbx]
+0x18079c74a:  mov       rax, qword ptr [rdx + 0x2b8]
+0x18079c751:  mov       rdx, qword ptr [rdx + 0x2c0]
+0x18079c758:  mov       rcx, rbx
+0x18079c75b:  call      rax
+0x18079c75d:  test      rax, rax
+0x18079c760:  je        0x18079c8af
+0x18079c766:  mov       r8, qword ptr [rip + 0x1e465b3]   ; [rip] = Method$System.Collections.Generic.List<GraphNodeStorage>.GetEnumerator()
+0x18079c76d:  mov       rdx, rax
+0x18079c770:  lea       rcx, [rsp + 0x28]
+0x18079c775:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x18079c77a:  movups    xmm0, xmmword ptr [rsp + 0x28]
+0x18079c77f:  movups    xmmword ptr [rsp + 0x40], xmm0
+0x18079c784:  movsd     xmm1, qword ptr [rsp + 0x38]
+0x18079c78a:  movsd     qword ptr [rsp + 0x50], xmm1
+0x18079c790:  xor       r14d, r14d
+0x18079c793:  mov       qword ptr [rsp + 0x28], r14
+0x18079c798:  lea       rbx, [rsp + 0x40]
+0x18079c79d:  mov       qword ptr [rsp + 0x30], rbx
+0x18079c7a2:  mov       rdx, qword ptr [rip + 0x1e32877]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.MoveNext()
+0x18079c7a9:  lea       rcx, [rsp + 0x40]
+0x18079c7ae:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x18079c7b3:  test      al, al
+0x18079c7b5:  je        0x18079c87f
+0x18079c7bb:  mov       rdi, qword ptr [rsp + 0x50]
+0x18079c7c0:  test      rdi, rdi
+0x18079c7c3:  je        0x18079c8b5
+0x18079c7c9:  mov       r9, qword ptr [rip + 0x1e77ec8]
+0x18079c7d0:  mov       r10, qword ptr [rdi]
+0x18079c7d3:  movzx     ecx, r14w
+0x18079c7d7:  movzx     edx, word ptr [r10 + 0x12a]
+0x18079c7df:  cmp       r14w, dx
+0x18079c7e3:  jae       0x18079c804
+0x18079c7e5:  mov       r8, qword ptr [r10 + 0xb0]
+0x18079c7ec:  nop       dword ptr [rax]
+0x18079c7f0:  movzx     eax, cx
+0x18079c7f3:  add       rax, rax
+0x18079c7f6:  cmp       qword ptr [r8 + rax*8], r9
+0x18079c7fa:  je        0x18079c85e
+0x18079c7fc:  inc       cx
+0x18079c7ff:  cmp       cx, dx
+0x18079c802:  jb        0x18079c7f0
+0x18079c804:  mov       r8d, 4
+0x18079c80a:  mov       rdx, r9
+0x18079c80d:  mov       rcx, rdi
+0x18079c810:  call      0x1801bd250
+0x18079c815:  mov       r8, rax
+0x18079c818:  mov       rax, qword ptr [r8]
+0x18079c81b:  mov       r8, qword ptr [r8 + 8]
+0x18079c81f:  mov       rdx, rsi
+0x18079c822:  mov       rcx, rdi
+0x18079c825:  call      rax
+0x18079c827:  mov       rdi, rax
+0x18079c82a:  test      rax, rax
+0x18079c82d:  je        0x18079c7a2
+0x18079c833:  mov       rdx, qword ptr [rip + 0x1e3271e]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.Dispose()
+0x18079c83a:  mov       rcx, rbx
+0x18079c83d:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x18079c842:  mov       rax, rdi
+0x18079c845:  mov       rbx, qword ptr [rsp + 0x70]
+0x18079c84a:  mov       rsi, qword ptr [rsp + 0x78]
+0x18079c84f:  mov       rdi, qword ptr [rsp + 0x80]
+0x18079c857:  add       rsp, 0x60
+0x18079c85b:  pop       r14
+0x18079c85d:  ret       
+
+===== 0x7A73C0 GridPixelElement$$TryFindOneValidInventorySlot =====
+0x1807a73c0:  mov       qword ptr [rsp + 0x10], rbx
+0x1807a73c5:  mov       qword ptr [rsp + 0x18], rsi
+0x1807a73ca:  mov       qword ptr [rsp + 0x20], rdi
+0x1807a73cf:  push      r14
+0x1807a73d1:  sub       rsp, 0x60
+0x1807a73d5:  mov       r14, rdx
+0x1807a73d8:  mov       rbx, rcx
+0x1807a73db:  cmp       byte ptr [rip + 0x1fa9852], 0
+0x1807a73e2:  jne       0x1807a743f
+0x1807a73e4:  lea       rcx, [rip + 0x1e27b6d]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.Dispose()
+0x1807a73eb:  call      0x1802154a0
+0x1807a73f0:  lea       rcx, [rip + 0x1e27c29]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.MoveNext()
+0x1807a73f7:  call      0x1802154a0
+0x1807a73fc:  lea       rcx, [rip + 0x1e27ce5]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.get_Current()
+0x1807a7403:  call      0x1802154a0
+0x1807a7408:  lea       rcx, [rip + 0x1e6d289]
+0x1807a740f:  call      0x1802154a0
+0x1807a7414:  lea       rcx, [rip + 0x1e3b905]   ; [rip] = Method$System.Collections.Generic.List<GraphNodeStorage>.GetEnumerator()
+0x1807a741b:  call      0x1802154a0
+0x1807a7420:  lea       rcx, [rip + 0x1e3b9b9]   ; [rip] = Method$System.Collections.Generic.List<GraphNodeStorage>.get_Count()
+0x1807a7427:  call      0x1802154a0
+0x1807a742c:  lea       rcx, [rip + 0x1e3ba6d]   ; [rip] = Method$System.Collections.Generic.List<GraphNodeStorage>.get_Item()
+0x1807a7433:  call      0x1802154a0
+0x1807a7438:  mov       byte ptr [rip + 0x1fa97f5], 1
+0x1807a743f:  xor       edi, edi
+0x1807a7441:  xor       edx, edx
+0x1807a7443:  mov       rcx, rbx
+0x1807a7446:  cmp       byte ptr [rbx + 0x28], dl
+0x1807a7449:  je        0x1807a754b
+0x1807a744f:  mov       qword ptr [rsp + 0x70], rdi
+0x1807a7454:  call      0x1807a8340   ; <- GridPixelElement$$get_children
+0x1807a7459:  test      rax, rax
+0x1807a745c:  je        0x1807a75cc
+0x1807a7462:  mov       r8, qword ptr [rip + 0x1e3b8b7]   ; [rip] = Method$System.Collections.Generic.List<GraphNodeStorage>.GetEnumerator()
+0x1807a7469:  mov       rdx, rax
+0x1807a746c:  lea       rcx, [rsp + 0x28]
+0x1807a7471:  call      0x180ff0c60   ; <- System.Collections.Generic.List<TreeViewReorderableDragAndDropController.TreeItemState>$$GetEnumerator
+0x1807a7476:  movups    xmm0, xmmword ptr [rsp + 0x28]
+0x1807a747b:  movups    xmmword ptr [rsp + 0x40], xmm0
+0x1807a7480:  movsd     xmm1, qword ptr [rsp + 0x38]
+0x1807a7486:  movsd     qword ptr [rsp + 0x50], xmm1
+0x1807a748c:  mov       qword ptr [rsp + 0x28], rdi
+0x1807a7491:  lea       rbx, [rsp + 0x40]
+0x1807a7496:  mov       qword ptr [rsp + 0x30], rbx
+0x1807a749b:  nop       dword ptr [rax + rax]
+0x1807a74a0:  mov       rdx, qword ptr [rip + 0x1e27b79]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.MoveNext()
+0x1807a74a7:  lea       rcx, [rsp + 0x40]
+0x1807a74ac:  call      0x180e42e60   ; <- System.Collections.Generic.List.Enumerator<object>$$MoveNext
+0x1807a74b1:  test      al, al
+0x1807a74b3:  je        0x1807a74fc
+0x1807a74b5:  mov       r8, qword ptr [rsp + 0x50]
+0x1807a74ba:  test      r8, r8
+0x1807a74bd:  je        0x1807a74a0
+0x1807a74bf:  mov       ecx, 4
+0x1807a74c4:  mov       r9, r14
+0x1807a74c7:  mov       rdx, qword ptr [rip + 0x1e6d1ca]
+0x1807a74ce:  call      0x180003fa0
+0x1807a74d3:  test      rax, rax
+0x1807a74d6:  je        0x1807a74a0
+0x1807a74d8:  cmp       dword ptr [rax + 0x38], 0
+0x1807a74dc:  jle       0x1807a74a0
+0x1807a74de:  test      rdi, rdi
+0x1807a74e1:  je        0x1807a74e8
+0x1807a74e3:  mov       ecx, dword ptr [rdi + 0x3c]
+0x1807a74e6:  jmp       0x1807a74ed
+0x1807a74e8:  mov       ecx, 0x80000000
+0x1807a74ed:  cmp       dword ptr [rax + 0x3c], ecx
+0x1807a74f0:  jl        0x1807a74a0
+0x1807a74f2:  mov       rdi, rax
+0x1807a74f5:  mov       qword ptr [rsp + 0x70], rax
+0x1807a74fa:  jmp       0x1807a74a0
+0x1807a74fc:  mov       rdx, qword ptr [rip + 0x1e27a55]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.Dispose()
+0x1807a7503:  mov       rcx, rbx
+0x1807a7506:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x1807a750b:  jmp       0x1807a7531
+0x1807a750d:  mov       rdx, qword ptr [rip + 0x1e27a44]   ; [rip] = Method$System.Collections.Generic.List.Enumerator<GraphNodeStorage>.Dispose()
+0x1807a7514:  mov       rcx, qword ptr [rsp + 0x30]
+0x1807a7519:  call      0x1802ff7b0   ; <- Unity.Services.Core.Device.UnityAdsIdentifier$$set_UserId
+0x1807a751e:  mov       rcx, qword ptr [rsp + 0x28]
+0x1807a7523:  test      rcx, rcx
+0x1807a7526:  jne       0x1807a75d2
+0x1807a752c:  mov       rdi, qword ptr [rsp + 0x70]
+0x1807a7531:  mov       rax, rdi
+0x1807a7534:  lea       r11, [rsp + 0x60]
+0x1807a7539:  mov       rbx, qword ptr [r11 + 0x18]
+0x1807a753d:  mov       rsi, qword ptr [r11 + 0x20]
+0x1807a7541:  mov       rdi, qword ptr [r11 + 0x28]
+0x1807a7545:  mov       rsp, r11
+0x1807a7548:  pop       r14
+0x1807a754a:  ret       
+
+===== 0x7B0CF0 StealPixelElement$$TryFindOneValidInventorySlot =====
+0x1807b0cf0:  mov       qword ptr [rsp + 8], rbx
+0x1807b0cf5:  push      rdi
+0x1807b0cf6:  sub       rsp, 0x20
+0x1807b0cfa:  cmp       byte ptr [rip + 0x1f9ff5f], 0
+0x1807b0d01:  mov       rdi, rdx
+0x1807b0d04:  mov       rbx, rcx
+0x1807b0d07:  jne       0x1807b0d1c
+0x1807b0d09:  lea       rcx, [rip + 0x1e63988]
+0x1807b0d10:  call      0x1802154a0
+0x1807b0d15:  mov       byte ptr [rip + 0x1f9ff44], 1
+0x1807b0d1c:  mov       rdx, qword ptr [rip + 0x1e63975]
+0x1807b0d23:  mov       rcx, qword ptr [rbx + 0x30]
+0x1807b0d27:  call      0x180214eb0
+0x1807b0d2c:  test      rax, rax
+0x1807b0d2f:  je        0x1807b0d52
+0x1807b0d31:  mov       rdx, qword ptr [rip + 0x1e63960]
+0x1807b0d38:  mov       ecx, 4
+0x1807b0d3d:  mov       r9, rdi
+0x1807b0d40:  mov       r8, rax
+0x1807b0d43:  mov       rbx, qword ptr [rsp + 0x30]
+0x1807b0d48:  add       rsp, 0x20
+0x1807b0d4c:  pop       rdi
+0x1807b0d4d:  jmp       0x180003fa0
+0x1807b0d52:  mov       rbx, qword ptr [rsp + 0x30]
+0x1807b0d57:  add       rsp, 0x20
+0x1807b0d5b:  pop       rdi
+0x1807b0d5c:  ret       
+
+===== 0x7BEFB0 PixelWindow$$TryFindOneValidInventorySlot =====
+0x1807befb0:  mov       qword ptr [rsp + 8], rbx
+0x1807befb5:  push      rdi
+0x1807befb6:  sub       rsp, 0x20
+0x1807befba:  cmp       byte ptr [rip + 0x1f91cc0], 0
+0x1807befc1:  mov       rdi, rdx
+0x1807befc4:  mov       rbx, rcx
+0x1807befc7:  jne       0x1807befdc
+0x1807befc9:  lea       rcx, [rip + 0x1e556c8]
+0x1807befd0:  call      0x1802154a0
+0x1807befd5:  mov       byte ptr [rip + 0x1f91ca5], 1
+0x1807befdc:  xor       edx, edx
+0x1807befde:  mov       rcx, rbx
+0x1807befe1:  call      0x1807c1720   ; <- PixelWindow$$get_child
+0x1807befe6:  xor       ecx, ecx
+0x1807befe8:  mov       rbx, rax
+0x1807befeb:  test      rax, rax
+0x1807befee:  je        0x1807bf06f
+0x1807beff0:  mov       r10, qword ptr [rax]
+0x1807beff3:  mov       r9, qword ptr [rip + 0x1e5569e]
+0x1807beffa:  movzx     edx, word ptr [r10 + 0x12a]
+0x1807bf002:  cmp       cx, dx
+0x1807bf005:  jae       0x1807bf024
+0x1807bf007:  mov       r8, qword ptr [r10 + 0xb0]
+0x1807bf00e:  nop       
+0x1807bf010:  movzx     eax, cx
+0x1807bf013:  add       rax, rax
+0x1807bf016:  cmp       qword ptr [r8 + rax*8], r9
+0x1807bf01a:  je        0x1807bf050
+0x1807bf01c:  inc       cx
+0x1807bf01f:  cmp       cx, dx
+0x1807bf022:  jb        0x1807bf010
+0x1807bf024:  mov       r8d, 4
+0x1807bf02a:  mov       rdx, r9
+0x1807bf02d:  mov       rcx, rbx
+0x1807bf030:  call      0x1801bd250
+0x1807bf035:  mov       r9, qword ptr [rax]
+0x1807bf038:  mov       rdx, rdi
+0x1807bf03b:  mov       r8, qword ptr [rax + 8]
+0x1807bf03f:  mov       rcx, rbx
+0x1807bf042:  call      r9
+0x1807bf045:  mov       rbx, qword ptr [rsp + 0x30]
+0x1807bf04a:  add       rsp, 0x20
+0x1807bf04e:  pop       rdi
+0x1807bf04f:  ret       

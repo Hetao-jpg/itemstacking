@@ -1,0 +1,39 @@
+<Project>
+
+  <!--
+    Item Stacking mod —— 公共构建属性（精简自 ContainerSuite\_shared\CommonMod.props）。
+
+    【为什么用显式 Import 而不是 Directory.Build.props】
+    工作区里还有其它项目。Directory.Build.props 会自动向上查找并套用，
+    会改掉其它项目的构建行为。这里做成独立文件，由本项目自己 Import，影响范围可控。
+
+    【为什么直接赋值、不加 Condition="'$(X)' == ''"】
+    AllowUnsafeBlocks / Nullable / LangVersion 等，SDK 的 props 已给默认值；
+    Condition 会判不出"用户没设过"，兜底静默失效（表现为 CS0227 不安全代码）。
+    改为直接赋值：本文件由项目在自家 PropertyGroup 之前 Import，项目里写同名的会覆盖这里。
+
+    【换游戏目录】改下面 GamePath 一处，或构建时 -p:GamePath="..." 覆盖。
+    【新增受管项目】在它的 csproj 里加：<Import Project="..\_shared\CommonMod.props" />
+  -->
+
+  <!-- ① 游戏路径与派生目录（Demo 版；Playtest 版改这里或 -p:GamePath 覆盖） -->
+  <PropertyGroup>
+    <GamePath>D:\SteamLibrary\steamapps\common\Probably Stolen Demo</GamePath>
+    <MLNet>$(GamePath)\MelonLoader\net6</MLNet>
+    <MLIl2Cpp>$(GamePath)\MelonLoader\Il2CppAssemblies</MLIl2Cpp>
+  </PropertyGroup>
+
+  <!-- ② 通用编译属性（项目里写了同名的会覆盖这里） -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- 输出到 bin/<配置>/<Dll>.dll（不带 net6.0 子目录），部署脚本好找 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+</Project>
