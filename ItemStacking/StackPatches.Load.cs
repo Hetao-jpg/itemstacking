@@ -12,40 +12,9 @@ namespace ItemStacking;
 public partial class Main
 {
     // ══════════════════════════════════════════════════════════════════
-    // 存档与拖动：SaveItemNode.OnAfterDeserialize / ItemMouseDragHandler.StartDrag
+    // 拖动：ItemMouseDragHandler.StartDrag
+    // （原「读档补满」SaveItemNode.OnAfterDeserialize 补丁已于 2026-10-12 整体删除）
     // ══════════════════════════════════════════════════════════════════
-    // ───────────────────────────────────────────────────────────────────────
-    // B. 读档改值（把存量物品补满）
-    //    在 SaveItemNode 反序列化后、游戏用它构建 GameItem 之前，改写 unitCount。
-    //    只动「恰好等于旧上限」的满堆，部分堆叠保持原样；不引入任何 clamp 风险。
-    //    ★ 堆叠状态持久化：unitCount 本来就存在 SaveItemNode.unitCount(0x18)，
-    //      存档自动保留堆叠数量，无需额外处理。
-    // ───────────────────────────────────────────────────────────────────────
-
-    [HarmonyPatch(typeof(SaveItemNode), "OnAfterDeserialize")]
-    private static class Patch_SaveItemNodeDeserialize
-    {
-        private static void Postfix(SaveItemNode __instance)
-        {
-            // 0.6.2：补 try/catch（此前是唯一裸奔的补丁）。读档路径一旦抛异常影响很大
-            // （可能整个存档加载失败），必须兜住并可排查；风格与其它补丁统一。
-            try
-            {
-                if (!_fillToCapOnLoad.Value) return;
-                int cur = __instance.unitCount;
-                if (cur > 0 && cur == _oldStackCap.Value)
-                {
-                    __instance.unitCount = StackCap;
-                    Diag($"读档补满：unitCount {cur} -> {StackCap}");
-                }
-            }
-            catch (Exception e)
-            {
-                if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                Log.Error($"读档补满异常（已跳过本节点，不影响读档）: {e}");
-            }
-        }
-    }
 
     // ───────────────────────────────────────────────────────────────────────
     // C. 拖起数量控制：普通拖动 = 1 个，Ctrl+拖动 = 整堆
@@ -81,7 +50,8 @@ public partial class Main
                 if (ctrl)
                 {
                     __instance.currentRemove = __instance.maxRemove;   // 整堆
-                    Diag($"StartDrag Ctrl 整堆：currentRemove={__instance.currentRemove}/{__instance.maxRemove}");
+                    DiagRate("startdrag.ctrl", 3,
+                        $"StartDrag Ctrl 整堆：currentRemove={__instance.currentRemove}/{__instance.maxRemove}");
                     return;
                 }
 
@@ -93,7 +63,8 @@ public partial class Main
                 if (!shift && !alt)
                 {
                     __instance.currentRemove = 1;
-                    Diag($"StartDrag 单件：currentRemove=1（maxRemove={__instance.maxRemove}）");
+                    DiagRate("startdrag.single", 3,
+                        $"StartDrag 单件：currentRemove=1（maxRemove={__instance.maxRemove}）");
                 }
             }
             catch (Exception e)

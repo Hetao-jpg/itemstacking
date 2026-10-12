@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -71,7 +71,7 @@ public partial class Main
             // ② 兜底：尝试塞进玩家背包（EmporiumEntry.invElement）
             var entry = TryGet(() => EmporiumEntry.Instance);
             var backpack = entry != null ? TryGet(() => entry.invElement) : null;
-            if (backpack != null && !SameInventory(backpack, sourceInv))
+            if (backpack != null && !SameNativePointer(backpack, sourceInv))
             {
                 try
                 {
@@ -102,9 +102,10 @@ public partial class Main
 
     // ── 共用：销毁前拆堆（Prefix 主体）／销毁后归还余量（Postfix 主体）──
     //   ★ §七 2.3（0.11.0）：补丁 1/2/3（UpgradePrinter / RestoreModule / RepairExtractor）
-    //     的 Prefix+Postfix 除「被拆物品参数名 + 日志 key」外完全相同。此前提炼公共实现，
-    //     三处只保留三行委托 —— 行为逐字节一致（含异常语义 / 日志 key），可单独回滚
-    //     （把某处改回手写即可）。
+    //     的 Prefix+Postfix 除「被拆物品参数名 + 日志 key」外完全相同，先提炼公共实现
+    //     （三行委托），2026-10-12 进一步合并为单个 [HarmonyTargetMethods] 补丁类
+    //     Patch_ConsumeSecondArg —— 行为逐字节一致（含异常语义 / 日志 key）。
+    //     回滚：git 历史 dc3d11a 里仍保留三份手写补丁类。
     //
     //   SplitBeforeDestroy：若 item.unitCount > 1，拆出 (n-1) 件为独立 GameItem（原品减到 1），
     //     原品保持原位不动（原版随后 Destroy 的仍是这 1 件）。
@@ -193,37 +194,67 @@ public partial class Main
         }
     }
 
-    // ── 补丁 1：MachineBottlePrinter.UpgradePrinter ──
-    [HarmonyPatch(typeof(MachineBottlePrinter), nameof(MachineBottlePrinter.UpgradePrinter))]
-    private static class Patch_UpgradePrinter
+    // ── 补丁 1/2/3 合并：销毁型消费（三者的 Prefix/Postfix 除「第 2 个参数 + 日志 key」
+    //    外逐字节一致，故合并为一个 [HarmonyTargetMethods] 补丁类）──
+    //   ★ 合并前的三个手写补丁见 git 历史 dc3d11a（Patch_UpgradePrinter /
+    //     Patch_RestoreModule / Patch_RepairExtractor），日志 key 与行为完全不变。
+    //   ★ 参数取法：Harmony 的 `__1` = 原方法第 2 个参数（0 基下标），
+    //     三处被消费的都是第 2 参（upgradeItem / electronicPart / electronicPart）。
+    //   ★ ValidatePatches 里三条独立自检（StackPatches.cs）【必须保留】：
+    //     TargetMethods 任一目标解析失败只会跳过该目标，自检负责把它变成启动告警。
+    [HarmonyPatch]
+    private static class Patch_ConsumeSecondArg
     {
-        private static void Prefix(GameItem printer, GameItem upgradeItem, out (GameInventory inv, GameItem rem) __state)
-            => __state = SplitBeforeDestroy(upgradeItem, "up-printer", "UpgradePrinter");
+        // (目标类型, 方法名, 日志 key, 方法名 tag) —— key 沿用合并前三份手写值（含 "-pf" 后缀）。
+        private static readonly (Type type, string method, string key, string tag)[] Targets =
+        {
+            (typeof(MachineBottlePrinter), nameof(MachineBottlePrinter.UpgradePrinter), "up-printer", "UpgradePrinter"),
+            (typeof(ModuleHelper),         nameof(ModuleHelper.RestoreModule),          "restore-mod", "RestoreModule"),
+            (typeof(ModuleHelper),         nameof(ModuleHelper.RepairExtractor),        "repair-ext", "RepairExtractor"),
+        };
 
-        private static void Postfix((GameInventory inv, GameItem rem) __state)
-            => ReturnRemainderAfter(__state, "up-printer-pf", "UpgradePrinter");
-    }
+        private static readonly Type[] TwoGameItems = { typeof(GameItem), typeof(GameItem) };
 
-    // ── 补丁 2：ModuleHelper.RestoreModule ──
-    [HarmonyPatch(typeof(ModuleHelper), nameof(ModuleHelper.RestoreModule))]
-    private static class Patch_RestoreModule
-    {
-        private static void Prefix(GameItem gameItem, GameItem electronicPart, out (GameInventory inv, GameItem rem) __state)
-            => __state = SplitBeforeDestroy(electronicPart, "restore-mod", "RestoreModule");
+        [HarmonyTargetMethods]
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            // 每个目标独立容错：找不到就跳过该目标并告警，绝不 yield null
+            // （Harmony 遇 null / 抛异常会中断整个补丁类的注册，三条自检负责兜底）。
+            for (int i = 0; i < Targets.Length; i++)
+            {
+                var t = Targets[i];
+                MethodBase m = null;
+                try { m = AccessTools.Method(t.type, t.method, TwoGameItems); }
+                catch (Exception e) when (e is not OutOfMemoryException and not StackOverflowException) { }
+                if (m != null) yield return m;
+                else WarnOnce("consume-target",
+                    $"[销毁修复] 找不到 {t.type.Name}.{t.method}（游戏改名？该处余量归还失效）");
+            }
+        }
 
-        private static void Postfix((GameInventory inv, GameItem rem) __state)
-            => ReturnRemainderAfter(__state, "restore-mod-pf", "RestoreModule");
-    }
+        private static void Prefix(GameItem __1, MethodBase __originalMethod,
+                                   out (GameInventory inv, GameItem rem) __state)
+        {
+            var (key, tag) = Find(__originalMethod);
+            __state = SplitBeforeDestroy(__1, key, tag);
+        }
 
-    // ── 补丁 3：ModuleHelper.RepairExtractor ──
-    [HarmonyPatch(typeof(ModuleHelper), nameof(ModuleHelper.RepairExtractor))]
-    private static class Patch_RepairExtractor
-    {
-        private static void Prefix(GameItem extractor, GameItem electronicPart, out (GameInventory inv, GameItem rem) __state)
-            => __state = SplitBeforeDestroy(electronicPart, "repair-ext", "RepairExtractor");
+        private static void Postfix((GameInventory inv, GameItem rem) __state,
+                                    MethodBase __originalMethod)
+        {
+            var (key, tag) = Find(__originalMethod);
+            ReturnRemainderAfter(__state, key + "-pf", tag);
+        }
 
-        private static void Postfix((GameInventory inv, GameItem rem) __state)
-            => ReturnRemainderAfter(__state, "repair-ext-pf", "RepairExtractor");
+        // 按方法名回查日志 key / tag（三个方法名互不相同，无歧义）。
+        // 查不到给兜底值、绝不抛异常 —— 日志 key 不能反过来让补丁失效。
+        private static (string key, string tag) Find(MethodBase m)
+        {
+            var name = m?.Name;
+            for (int i = 0; i < Targets.Length; i++)
+                if (Targets[i].method == name) return (Targets[i].key, Targets[i].tag);
+            return ("consume", "Consume");
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════

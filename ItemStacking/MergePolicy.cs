@@ -122,6 +122,22 @@ public partial class Main
                 return MergeVerdict.Deny;
             }
 
+            // ── 1.6) ★ 1.2.0 tag 值域校验（数据保护）【状态相等的补充闸门】──
+            //   背景（2026-10-12 核桃反馈 + 反汇编取证）：
+            //   GetSplitItem 拆分时【不用原物品 tag】，而是 DirectoryMaster.Item(identifier)
+            //   重新生成默认物品 ⇒ 拆出来的物品带【默认 tag】（满电/满耐久/默认纯度/默认品质）。
+            //   ⇒ 「状态相同但偏离默认」的物品（如两件 50% 电量电池）堆叠后，拆分会污染成满电。
+            //   ★ 本判据要求：关键 tag（电量/耐久/纯度/品质/液体/次数等，见 ValueGate.cs）的
+            //     当前值必须【等于该 identifier 的默认模板值】才可堆，从根上杜绝拆分污染。
+            //   ★ 故障语义：比较抛异常 = 数据保护故障 ⇒ Deny（宁可拦不可丢）。
+            if (ValueGateEnabled && !AtDefaultState(ctx.target, ctx.source))
+            {
+                if (ConsumeJudgeFault(FaultProtection))
+                { WarnOnceOnce("mp.fault.valuegate", true); return MergeVerdict.Deny; }
+                reason = "偏离默认状态（非满电/非满耐久/非默认纯度/非默认品质等，拆分会污染）";
+                return MergeVerdict.Deny;
+            }
+
             // ── 2) 物品黑名单（按 id；类判据已停用）（数据保护）──
             var block = GetBlacklistReason(ctx.target, ctx.source);
             if (ConsumeJudgeFault(FaultProtection)) { WarnOnceOnce("mp.fault.blacklist", true); return MergeVerdict.Deny; }

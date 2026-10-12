@@ -3,11 +3,32 @@
   <!--
     Item Stacking —— 物品堆叠增强 mod（Probably Stolen 0.46D, MelonLoader）。
 
-    公共属性（游戏路径 / TargetFramework / 输出路径）在 ..\_shared\CommonMod.props。
+    公共属性（游戏路径 / TargetFramework / 输出路径）已内联在本文件，
+    不依赖任何共享 props，本目录可独立编译。
     堆叠机制的数据与钩子点见 ..\资料库\堆叠资料库.md。
   -->
 
-  <Import Project="..\_shared\CommonMod.props" />
+  <!-- ① 游戏路径与派生目录 -->
+  <PropertyGroup Condition="'$(GamePath)' == ''">
+    <GamePath>D:\SteamLibrary\steamapps\common\Probably Stolen Demo</GamePath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <MLNet>$(GamePath)\MelonLoader\net6</MLNet>
+    <MLIl2Cpp>$(GamePath)\MelonLoader\Il2CppAssemblies</MLIl2Cpp>
+  </PropertyGroup>
+
+  <!-- ② 通用编译属性 -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- 输出到 bin/<配置>/<Dll>.dll（不带 net6.0 子目录），部署脚本好找 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
 
   <PropertyGroup>
     <!-- ★ 冻结不改：= DLL 名 = MelonPreferences 配置段名 -->

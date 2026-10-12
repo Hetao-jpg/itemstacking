@@ -116,79 +116,71 @@ public partial class Main
     //   ★ `keysReleased.Contains(quickTransferKey)` 的等价判据用 `Input.GetKeyUp(quickTransferKey)`：
     //     `InputActionManager.UpdateKeys` 正是用 `Input.GetKeyUp(k)` 在同帧构建 keysReleased 的
     //     （反汇编 0x7A9878），故同帧等价，且无需依赖 IL2CPP 的 `ISet<KeyCode>` 形参注入。
+    //
+    // ── 为什么不合并成一个 [HarmonyTargetMethods] 补丁类（2026-10-12 结论）──
+    //   三个 handler **确实共享**非泛型基类 `InputActionHandler`（EmptyActionHandler →
+    //   InputActionHandler），但 `currentItem` / `isQuickTransfer` / `key` / `quickTransferKey`
+    //   四个成员是【各自在叶子类上声明的 property】，基类上一个都没有（已用 Mono.Cecil
+    //   实测 interop DLL 确认）。合并后的单一 Prefix 只能按基类型取参 ⇒ 读不到这四个成员。
+    //   ⇒ 按计划退回 fallback：**保留 3 个类**，只把 try/catch 样板抽到 RunPairRelease。
+    //     （日志 key pair-qt / pair-alt / pair-alt1 保持独立，见 F3。）
+    private static bool RunPairRelease(InputActionHandler handler, Func<bool> dispatch,
+                                       Action clearCurrentItem, Action resetFlag,
+                                       string logKey, string typeName)
+    {
+        // ★ 三个委托全部【在 try 之内】求值 —— 与合并前的三个手写 Prefix 逐语句等价：
+        //   读 currentItem/key 抛异常也会被这里接住并 return true 交还原生。
+        try
+        {
+            if (dispatch())
+            {
+                NativeTailCleanup(handler, clearCurrentItem, resetFlag);
+                return false;      // 已处理：跳过原生（含其尾部清理，故上面手动复刻）
+            }
+            return true;           // 不接管：交还原生（原生自己会清理）
+        }
+        catch (Exception e)
+        {
+            if (e is OutOfMemoryException || e is StackOverflowException) throw;
+            WarnOnce(logKey, $"修饰键配对快移异常（{typeName}），本次交还原生: {e.Message}");
+            return true;
+        }
+    }
+
     [HarmonyPatch(typeof(ItemQuickTransferHandler), "OnEventRelease")]
     private static class Patch_PairReleaseQT
     {
         private static bool Prefix(ItemQuickTransferHandler __instance)
-        {
-            try
-            {
-                if (DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
-                                        __instance.key, __instance.quickTransferKey))
-                {
-                    NativeTailCleanup(__instance, () => __instance.currentItem = null,
-                        () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; });
-                    return false;      // 已处理：跳过原生（含其尾部清理，故上面手动复刻）
-                }
-                return true;           // 不接管：交还原生（原生自己会清理）
-            }
-            catch (Exception e)
-            {
-                if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("pair-qt", $"修饰键配对快移异常（ItemQuickTransferHandler），本次交还原生: {e.Message}");
-                return true;
-            }
-        }
+            => RunPairRelease(__instance,
+                () => DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
+                                          __instance.key, __instance.quickTransferKey),
+                () => __instance.currentItem = null,
+                () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; },
+                "pair-qt", "ItemQuickTransferHandler");
     }
 
     [HarmonyPatch(typeof(ItemQuickTransferAltHandler), "OnEventRelease")]
     private static class Patch_PairReleaseAlt
     {
         private static bool Prefix(ItemQuickTransferAltHandler __instance)
-        {
-            try
-            {
-                if (DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
-                                        __instance.key, __instance.quickTransferKey))
-                {
-                    NativeTailCleanup(__instance, () => __instance.currentItem = null,
-                        () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; });
-                    return false;
-                }
-                return true;
-            }
-            catch (Exception e)
-            {
-                if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("pair-alt", $"修饰键配对快移异常（ItemQuickTransferAltHandler），本次交还原生: {e.Message}");
-                return true;
-            }
-        }
+            => RunPairRelease(__instance,
+                () => DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
+                                          __instance.key, __instance.quickTransferKey),
+                () => __instance.currentItem = null,
+                () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; },
+                "pair-alt", "ItemQuickTransferAltHandler");
     }
 
     [HarmonyPatch(typeof(ItemQuickTransferAltHandler1), "OnEventRelease")]
     private static class Patch_PairReleaseAlt1
     {
         private static bool Prefix(ItemQuickTransferAltHandler1 __instance)
-        {
-            try
-            {
-                if (DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
-                                        __instance.key, __instance.quickTransferKey))
-                {
-                    NativeTailCleanup(__instance, () => __instance.currentItem = null,
-                        () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; });
-                    return false;
-                }
-                return true;
-            }
-            catch (Exception e)
-            {
-                if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("pair-alt1", $"修饰键配对快移异常（ItemQuickTransferAltHandler1），本次交还原生: {e.Message}");
-                return true;
-            }
-        }
+            => RunPairRelease(__instance,
+                () => DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
+                                          __instance.key, __instance.quickTransferKey),
+                () => __instance.currentItem = null,
+                () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; },
+                "pair-alt1", "ItemQuickTransferAltHandler1");
     }
 
     // ── 按键分派：按实例的 key/quickTransferKey 判定修饰键 → 路由到对应配对 ──
@@ -381,43 +373,6 @@ public partial class Main
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             WarnOnce("pair-accept", $"配对快移调用原生 TryAcceptOnce 异常，本次不搬: {e.Message}");
             return 0;
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  O6：三个 handler 的实际键位一次性打印（仅 DiagLog 开时）
-    //  key / quickTransferKey 是 prefab 的 [SerializeField] 数据，静态不可见
-    //  （Awake 只自注册 current —— 已反汇编核实）。分派逻辑按键位路由，
-    //  故启动时（进入场景后）打出来，便于确认「哪个类 = Shift / Alt / Ctrl」。
-    // ══════════════════════════════════════════════════════════════════════
-    private static bool _modifierKeyDumped;
-
-    private static void ModifierKeyProbeTick()
-    {
-        if (!DiagOn) return;
-        if (_modifierKeyDumped) return;
-        try
-        {
-            var q  = TryGet(() => ItemQuickTransferHandler.current);
-            var a  = TryGet(() => ItemQuickTransferAltHandler.current);
-            var a1 = TryGet(() => ItemQuickTransferAltHandler1.current);
-            if (q == null && a == null && a1 == null) return;   // 尚未创建 → 下帧再试
-            _modifierKeyDumped = true;
-
-            string sQ  = q  == null ? "缺失" : $"key={q.key}, quickTransferKey={q.quickTransferKey}";
-            string sA  = a  == null ? "缺失" : $"key={a.key}, quickTransferKey={a.quickTransferKey}";
-            string sA1 = a1 == null ? "缺失" : $"key={a1.key}, quickTransferKey={a1.quickTransferKey}";
-            Log.Msg("[修饰键] 键位探针（用于确认分派路由）：" +
-                    "ItemQuickTransferHandler(" + sQ + ")，" +
-                    "ItemQuickTransferAltHandler(" + sA + ")，" +
-                    "ItemQuickTransferAltHandler1(" + sA1 + ")。" +
-                    "分派规则：Shift ⇒ 展示柜↔主仓库；Alt ⇒ 玩家柜台↔主仓库；其它 ⇒ 交还原生。");
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            _modifierKeyDumped = true;   // 出错也别每帧重试
-            WarnOnce("modifierkey", $"[修饰键] 键位探针输出失败: {e.Message}");
         }
     }
 }

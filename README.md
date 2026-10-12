@@ -211,7 +211,7 @@
 > | 键 | 类型 | 语义 |
 > |---|---|---|
 > | `StackBlacklist` | bool | 保护总闸（保留旧键名，向后兼容）。关闭 = 全部黑白名单与类判据失效 |
-> | `ContainerWhitelist` | string | **合并旧 StackScope + StrictWhitelist**。留空 = 不限容器；非空 = **只有名单内容器可堆叠** |
+> | `ContainerWhitelist` | string | **合并旧 StackScope + StrictWhitelist**。**留空 = 全不生效**；非空 = **只有名单内容器可堆叠**。2026-10-12 起默认值 = 常用容器集合（owner:/slot: token，见下表） |
 > | `ContainerBlacklist` | string | 原 StackExclude 改名。名单内容器禁止堆叠（双端判定，命中即拦截） |
 > | `ItemWhitelist` | string | 新增。**黑名单优先**：命中者豁免「类判据」，但不豁免「按 id 黑名单」 |
 > | `ItemBlacklist` | string | 原 BlockItemIds 改名。按 id 禁止堆叠（仅自定义项；内置名单在代码常量） |
@@ -634,32 +634,41 @@
 | `StackScope`          | string | 空     | 堆叠作用域白名单容器 id（逗号分隔，如 `save_bag`；空=不限，0.5.1）             |
 
 > ⚠️ 上表是 **0.5.2 时期的历史快照**，与当前代码不一致。**实际生效的配置项以代码
-> `OnInitializeMelon` 里的 `cat.CreateEntry` 为准**（0.8.0 起重构为四列表架构）：
+> `OnInitializeMelon` 里的 `cat.CreateEntry` 为准**（0.8.0 起重构为四列表架构；
+> 2026-10-12 又有删减）：
 >
 > | Key | 类型 | 默认 | 说明 |
 > |---|---|---|---|
 > | `EnableStacking` | bool | true | 启用堆叠总闸 |
 > | `NewStackCap` | int | 10 | 堆叠上限（下限钳到 ≥1） |
-> | `OldStackCap` | int | 10 | 识别「旧满堆」用 |
-> | `FillToCapOnLoad` | bool | true | 读档补满 |
 > | `CtrlDragWholeStack` | bool | true | Ctrl+拖动 = 整堆 |
+> | `CtrlTransferMergeGate` | bool | true | Ctrl 点击快移的合并也走名单/状态判定 |
 > | `DiagLog` | bool | false | `[Diag]` 诊断日志 |
-> | `StackBlacklist` | bool | true | 类判据保护总闸 |
-> | `ContainerWhitelist` | string | 空 | 非空 = **仅**名单内容器可堆叠 |
+> | `StackBlacklist` | bool | true | 类判据保护总闸（现仅控制自定义 id 黑名单；内置名单已停用） |
+> | `ContainerWhitelist` | string | 常用容器集合（2026-10-12 起） | 非空 = **仅**名单内容器可堆叠；空 = 全不生效。默认含船舱/背包/笼/设备（`owner:`）+ 主仓库/展示柜/暗格/柜台（`slot:`），17 项 `owner:` + 4 项 `slot:`，见 `Main.cs DefaultContainerWhitelist` |
 > | `ContainerBlacklist` | string | 空 | 名单内容器禁止堆叠 |
-> | `ItemWhitelist` | string | 空 | 豁免「类判据」（黑名单优先，不能翻案 id 黑名单） |
-> | `ItemBlacklist` | string | 空 | 自定义 id 黑名单（内置名单在代码常量） |
+> | `ItemBlacklist` | string | 空 | 自定义 id 黑名单（★ 内置名单已于 2026-10-12 注释停用） |
 > | **`BlockCounterStack`** | bool | **false** | 柜台禁堆（**0.9.0 起默认关**） |
-> | **`StackValueTotal`** | bool | **true** | **交易系统按整堆总价值计价（0.9.0 新增，默认开）** |
-> | `AltClickTransferToCounter` | bool | true | LeftAlt 快移到柜台（总闸） |
-> | `AltClickOnClickMode` | bool | true | Alt 快移接管总开关 |
-> | `AltQuickTransferAmount` | int | 1 | Alt 快移件数（9999 = 原生整堆） |
+> | **`StackValueTotal`** | bool | **false** | **交易系统按整堆总价值计价（0.10.0 起默认关**） |
+> | `ModifierKeysEnabled` | bool | true | 修饰键快移总开关 |
+> | `AltClickTransferToCounter` | bool | true | Alt 快移总闸 |
+> | `AltPairEnable` | bool | true | Alt 配对快移 |
+> | `ShiftPairEnable` | bool | true | Shift 配对快移 |
+> | `AltQuickTransferAmount` | int | 1 | Alt/Shift 快移件数（9999 ≈ 原生整堆） |
+> | `AltPairMode` | string | `"counter_inv"` | Alt 配对模式（`counter_inv` / `native`） |
+> | `AltPairMerge` | bool | true | 配对快移时允许合并 |
+> | `z9_UseMergePolicy` | bool | true | 合并判定代码路径（新版单一源；关 = 退回旧路径并失去状态闸门，普通玩家勿动） |
+>
+> **★ 已删除的配置项（2026-10-12，启动时自动从 cfg 清理孤儿键）**：
+> `FillToCapOnLoad` / `OldStackCap`（读档补满功能整体移除）、`ItemWhitelist`（原本就无实际作用）。
 >
 > ★ 含逗号的字符串值**必须用引号包起来**（`ItemBlacklist = "a,b"`）——
 > 未加引号的裸值是非法 TOML，会让整份 `MelonPreferences.cfg` 载入失败并进入 Fallback，
 > 连锁后果是**全游戏所有 mod 的配置都无法再写盘**（0.6.6 实机踩过，见该版本记录）。
 >
-> 局内手改 cfg 会被 1.5s 轮询的保活机制采纳（mtime 变新 = 磁盘权威），无需重启。
+> ★ cfg 保活机制（1.5s mtime 轮询采纳）已整体删除（2026-10-11 备份于
+> `ItemStacking\_backup_CfgKeepAlive.cs.bak-20261011`）。局内手改 cfg 后需重启游戏生效
+> （启动时的中文 token 迁移与废弃键清理仍会自动写盘一次）。
 
 > 默认上限已于 0.3.2 从 999/50 降到 10：减小缺省堆叠量，降低误合并的破坏面  
 > （详见下方「⚠️ 使用风险：容器堆叠会丢失容器内物品」）。  
@@ -686,7 +695,6 @@
 
 ```
 Item stacking\
-├─ _shared\CommonMod.props        # 公共构建属性（游戏路径/TFM/输出），从 ContainerSuite 精简
 ├─ ItemStacking\                  # mod 主工程（= AssemblyName = DLL 名 = 配置段名）
 │  ├─ ItemStacking.csproj
 │  ├─ AssemblyInfo.cs             # MelonInfo / MelonGame（公司名已核实：Questing Goose Studio）

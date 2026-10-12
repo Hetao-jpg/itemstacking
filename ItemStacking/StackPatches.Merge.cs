@@ -65,8 +65,9 @@ public partial class Main
                     //    这是"先别合并"，不是"禁止合并"——语义与 MergePolicy.Deny 区分开。
                     if (ShouldSteerToEmptySlot(ctxNew))
                     {
-                        if (DiagOn) Diag($"[导流] MayStack 返回 false（导流：让原生找空格）：" +
-                             $"{__instance.identifier} / {otherItem.identifier}");
+                        DiagOnce("steer." + SafeId(__instance) + "/" + SafeId(otherItem),
+                            $"[导流] MayStack 返回 false（导流：让原生找空格）：" +
+                            $"{__instance.identifier} / {otherItem.identifier}");
                         __result = false;
                         return false;
                     }
@@ -75,7 +76,8 @@ public partial class Main
                     var verdict = Evaluate(ctxNew, out var reasonNew);
                     if (verdict == MergeVerdict.Deny)
                     {
-                        if (DiagOn) Diag($"MayStack 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {otherItem.identifier}");
+                        // ★ 拦截必须始终输出（限流只针对"放行/成功"类）——实测要抓的正是拦截原因。
+                        Diag($"MayStack 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {otherItem.identifier}");
                         __result = false;
                         return false;
                     }
@@ -85,11 +87,12 @@ public partial class Main
                     if (!string.IsNullOrEmpty(idAn) &&
                         string.Equals(idAn, idBn, StringComparison.Ordinal))
                     {
-                        if (DiagOn) Diag($"MayStack 放行（同名）：{idAn}");
+                        DiagRate("maystack.ok." + idAn, 3, $"MayStack 放行（同名）：{idAn}");
                         __result = true;
                         return false;             // 放行同名，跳过原生委托检查
                     }
-                    if (DiagOn) Diag($"MayStack 走原生（不同名）：{idAn} / {idBn}");
+                    DiagRate("maystack.diff." + SafeId(__instance) + "/" + SafeId(otherItem), 3,
+                        $"MayStack 走原生（不同名）：{idAn} / {idBn}");
 
                     return true;                  // 不同名 / 空 id 走原生（仍 false）
                 }
@@ -229,6 +232,7 @@ public partial class Main
                     var verdict = Evaluate(ctxNew, out var reasonNew);
                     if (verdict == MergeVerdict.Deny)
                     {
+                        // ★ 拦截始终输出。
                         Diag($"GetStackSlot 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {itemToBeStacked.identifier}");
                         __result = null;
                         return false;
@@ -312,7 +316,8 @@ public partial class Main
                     m.numTransfer = int.MaxValue;               // 原生同款兜底 (0x7fffffff)
                 }
 
-                Diag($"GetStackSlot {__instance.identifier}：numTransfer={m.numTransfer}（m2={(m2 != null ? "有" : "无")}）");
+                DiagRate("gss.ok." + SafeId(__instance), 3,
+                    $"GetStackSlot {__instance.identifier}：numTransfer={m.numTransfer}（m2={(m2 != null ? "有" : "无")}）");
                 __result = m;
                 return false;
             }
@@ -379,9 +384,10 @@ public partial class Main
                 if (reason == null) return true;
 
                 // 仅供排查：本次「若在 MayStack 层就会导流/拦截」的合并，在这里只记录不干预。
-                Diag($"[直通观测] 合并候选被判定为「{reason}」——本层不拦截（由 MayStack 导流）：" +
-                     $"源 {SafeId(source)} ×{source.unitCount} → 目标堆 {SafeId(target)} ×{target.unitCount}" +
-                     $"（容器 {SafeId(__instance.inventory)}）");
+                DiagRate("observe." + SafeId(source) + "/" + SafeId(target), 3,
+                    $"[直通观测] 合并候选被判定为「{reason}」——本层不拦截（由 MayStack 导流）：" +
+                    $"源 {SafeId(source)} ×{source.unitCount} → 目标堆 {SafeId(target)} ×{target.unitCount}" +
+                    $"（容器 {SafeId(__instance.inventory)}）");
                 return true;
             }
             catch (Exception e)

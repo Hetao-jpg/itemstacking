@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -104,54 +104,6 @@ public partial class Main
         }
     }
 
-    // ── 0.9.0 / 0.10.0 价值·链探针：整堆计价的单件价 / 数量 / 总价 + 调用链头部 ──
-    //   目的（0.9.0）：实机确认「卖出时柜台到底按什么数量扣物品」。
-    //   目的（0.10.0 新增）：**定位是哪个 mod 先抬了单件价** —— 用户机器上出现
-    //     「整堆价格异常过高」而本机复现不了，根因是加价顺序（另一 mod 在本方法
-    //     Postfix 链或原生内部链更早抬高单件价，我们再 ×N 就放大）。本探针打印
-    //     调用栈头部，一眼看出是谁在链上先动的手。
-    //   按「物品 id + 数量 + 单价」去重，上限 40 条；**受 DiagLog 总闸控制**。
-    private static readonly HashSet<string> _valueProbed = new HashSet<string>(StringComparer.Ordinal);
-
-    private static void ProbeNegociatedValue(GameItem item, long unit, int count, long total)
-    {
-        try
-        {
-            if (!DiagOn) return;                             // 0.9.0：诊断总闸
-            if (_valueProbed.Count >= 40) return;
-            string key = SafeId(item) + "|" + count + "|" + unit;
-            if (!_valueProbed.Add(key)) return;
-            Log?.Msg($"[整堆计价] {SafeId(item)}：单价 {unit} × {count} 件 = 总价 {total}");
-
-            // ★ 0.10.0：打印调用链头部，用于定位「谁在链上先抬价」。
-            //   跳过本 mod 自身的 3 帧（Probe → Postfix → Harmony 蹦床），取之后的调用方。
-            try
-            {
-                var st = new System.Diagnostics.StackTrace(3, false);
-                var sb = new System.Text.StringBuilder("[整堆计价·链] 调用链头部：\n");
-                int shown = 0;
-                for (int i = 0; i < st.FrameCount && shown < 8; i++)
-                {
-                    var m = st.GetFrame(i)?.GetMethod();
-                    if (m == null) continue;
-                    var decl = m.DeclaringType;
-                    // 跳过本 mod 自身的方法（ItemStacking.*），只留外部调用方。
-                    if (decl != null && decl.Namespace != null &&
-                        decl.Namespace.StartsWith("ItemStacking", StringComparison.Ordinal))
-                        continue;
-                    sb.Append("    ").Append(decl?.FullName ?? "?").Append('.').Append(m.Name).Append('\n');
-                    shown++;
-                }
-                Log?.Msg(sb.ToString());
-            }
-            catch { /* 探针失败不影响计价 */ }
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-        }
-    }
-
     // ── 兜底：无 maxSlotRemoveItemFunc 委托时，移除上限 = 全部数量 ──
     // TryAcceptOnce 用 min(..., MaxNumRemove(dragged)) 钳制合并量；
     // 原版委托恒空，若原生默认小值会导致每次只合并 1 个。
@@ -169,7 +121,8 @@ public partial class Main
                 if (inv != null && inv.maxSlotRemoveItemFunc != null) return;
                 int before = __result;
                 if (__instance.unitCount > __result) __result = __instance.unitCount;
-                Diag($"MaxNumRemove {__instance.identifier}：{before} -> {__result}（unitCount={__instance.unitCount}）");
+                DiagRate("maxnumremove." + SafeId(__instance), 3,
+                    $"MaxNumRemove {__instance.identifier}：{before} -> {__result}（unitCount={__instance.unitCount}）");
             }
             catch (Exception e)
             {
@@ -211,7 +164,8 @@ public partial class Main
                     // 堆到已有同名堆上：剩余空间抬到新上限
                     int want = StackCap - target.unitCount;
                     if (want > __result) __result = want;
-                    Diag($"MaxNumAdd {__instance.identifier} -> 目标堆 {target.identifier}：{before} -> {__result}（目标 unitCount={target.unitCount}，StackCap={StackCap}）");
+                    DiagRate("maxnumadd.stack." + SafeId(__instance) + "/" + SafeId(target), 3,
+                        $"MaxNumAdd {__instance.identifier} -> 目标堆 {target.identifier}：{before} -> {__result}（目标 unitCount={target.unitCount}，StackCap={StackCap}）");
                 }
                 else if (__result < StackCap)
                 {
@@ -231,7 +185,8 @@ public partial class Main
                     //   numTransfer = StackCap 即可保证一次进格且不超上限。
                     int want = StackCap;
                     if (want > __result) __result = want;
-                    Diag($"MaxNumAdd {__instance.identifier} -> 空槽：{before} -> {__result}（unitCount={__instance.unitCount}，StackCap={StackCap}）");
+                    DiagRate("maxnumadd.empty." + SafeId(__instance), 3,
+                        $"MaxNumAdd {__instance.identifier} -> 空槽：{before} -> {__result}（unitCount={__instance.unitCount}，StackCap={StackCap}）");
                 }
             }
             catch (Exception e)

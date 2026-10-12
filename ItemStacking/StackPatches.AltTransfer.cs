@@ -121,8 +121,9 @@ public partial class Main
             if (currentItem == null) return;
 
             _altTransferScope++;
-            Diag($"Alt 快移作用域进入（depth={_altTransferScope}）：{SafeId(currentItem)} ×{currentItem.unitCount}，" +
-                 $"本次件数={AltQuickTransferAmount}");
+            DiagRate("altenter." + SafeId(currentItem), 3,
+                $"Alt 快移作用域进入（depth={_altTransferScope}）：{SafeId(currentItem)} ×{currentItem.unitCount}，" +
+                $"本次件数={AltQuickTransferAmount}");
         }
         catch (Exception e)
         {
@@ -332,8 +333,9 @@ public partial class Main
                     if (raised > 1)
                     {
                         __result.numTransfer = raised;
-                        Diag($"[落点抬升] GameGridInventory 硬编码 1 件 → {raised}：" +
-                             $"{SafeId(item)} ×{item.unitCount}（容器 {SafeId(__result.inventory)}，StackCap={StackCap}）");
+                        DiagRate("lift." + SafeId(item), 3,
+                            $"[落点抬升] GameGridInventory 硬编码 1 件 → {raised}：" +
+                            $"{SafeId(item)} ×{item.unitCount}（容器 {SafeId(__result.inventory)}，StackCap={StackCap}）");
                     }
                 }
                 return;
@@ -343,11 +345,12 @@ public partial class Main
 
             // ★ 0.7.0 曾改为逐次无条件输出，0.9.0 收回 DiagLog 总闸之下 ——
             //   排查 Alt 落点时开 DiagLog 即可看到每一次的完整快照。
+            //   ★ 0.12.2 限流：同一物品最多打 3 次，避免快速 Alt 快移刷屏。
             if (DiagOn)
             {
                 try
                 {
-                    Log?.Msg(
+                    DiagRate("altlot." + SafeId(item), 3,
                         $"[Alt 落点] 命中：item={SafeId(item)} ×{item.unitCount}，" +
                         $"原生结果={( __result == null ? "null" : "有")}" +
                         (__result == null
@@ -439,17 +442,7 @@ public partial class Main
     }
     }
 
-    // 安全取 identifier（对象可能已被销毁，属性读取会猝死）。
-    private static string SafeId(object o)
-    {
-        try
-        {
-            if (o is GameItem gi) return gi.identifier;
-            if (o is GameInventory inv) return inv.identifier;
-            return o == null ? "null" : o.GetType().Name;
-        }
-        catch { return "?"; }
-    }
+    // （SafeId 已抽出至 Il2CppHelpers.cs，2026-10-12。）
 
     // ══════════════════════════════════════════════════════════════════════
     //  ★ 0.12.1 · Ctrl 快移合并闸门（问题1）

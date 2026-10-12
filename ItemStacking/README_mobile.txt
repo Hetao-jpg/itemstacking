@@ -13,28 +13,36 @@ Item Stacking · 自定义物品堆叠
 ▎功能
 · 拖放堆叠（同名合并）
 · 堆叠上限自定义（默认 10）
-· Ctrl+拖动整堆 / 读档补满
+· Ctrl+拖动整堆
 · Alt 快移：玩家柜台 ↔ 主仓库
 · Shift 快移：展示柜 ↔ 主仓库
 · 状态一致性：状态完全相等才可合
 · 容器防护：装了东西禁止合并
-· 物品黑名单：node/模组/神经核心/
-  钥匙卡/文书等
+· 物品黑名单：仅自定义 ItemBlacklist
+  （内置名单已停用）
 · 容器白名单/黑名单
 · 整堆计价（默认关）
 · 销毁修复：打印机/模块/采矿机/
   口袋/熔炉/解序器
 · 补丁自检 / 诊断日志
+（读档补满已移除）
 
 ▎重要默认
 容器白名单（ContainerWhitelist）
-留空 = 任何容器都不堆叠
-（等于没启用）。
-要启用，必须填允许的容器，
-含逗号时用引号包起来。
+默认已含常用容器，装好即用：
+  储藏区 / 走私暗格 / 机器区、
+  小中大背包 / 挎包 / 腰包、动物笼、
+  冰箱 / 充能器 / 清洁机器人 / 水瓶打印机、
+  主仓库 / 展示柜 / 海报暗格 / 柜台。
+留空 = 都不堆叠（等于没启用）。
+含逗号用引号包起来；cfg 里已有旧值时优先，
+要新默认就删掉该行重启。
 
-示例：
-ContainerWhitelist = "owner:backpack_medium,owner:storage_bay,slot:save_bag"
+示例（即默认值）：
+ContainerWhitelist = "owner:storage_bay,...,owner:bottle_printer,slot:save_bag,slot:showcase_save_bag,slot:hidden_save_bag,slot:back_inv_save_bag"
+
+owner:物品id（背包/船舱/笼子），
+slot:槽位id（固定窗口格）。
 
 slot: 用游戏原生 id：
   save_bag           = 主仓库
@@ -55,17 +63,14 @@ slot: 用游戏原生 id：
 
 启用堆叠（EnableStacking）：开
 堆叠上限（NewStackCap）：10
-读档补满（FillToCapOnLoad）：开
-旧堆叠上限（OldStackCap）：10
 Ctrl整堆（CtrlDragWholeStack）：开
 诊断日志（DiagLog）：关
 保护总闸（StackBlacklist）：开
-容器白名单（ContainerWhitelist）：空
+容器白名单（ContainerWhitelist）：常用容器集合
   ★ 空 = 全不生效
 容器黑名单（ContainerBlacklist）：空
-物品白名单（ItemWhitelist）：空
-  （已无效，保留兼容）
 物品黑名单（ItemBlacklist）：空
+  （内置名单已停用）
 柜台禁堆（BlockCounterStack）：关
 整堆计价（StackValueTotal）：关
 修饰键总开关（ModifierKeysEnabled）：开
@@ -75,17 +80,16 @@ Shift配对（ShiftPairEnable）：开
 快移件数（AltQuickTransferAmount）：1
 Alt配对模式（AltPairMode）：counter_inv
 配对时合并（AltPairMerge）：开
+合并判定（z9_UseMergePolicy）：开
 
 值含逗号请加引号。
 
 ▎外置黑名单
-Mods/item_blacklist.json 可覆盖：
+Mods/item_blacklist.json 可覆盖
+（内置名单已停用，block* 组暂不生效；
+ignoreTags 仍用于状态比较）：
 {
   "blockItemIds": ["metal_ingot"],
-  "blockIdPrefixes": ["node"],
-  "blockIdContains": ["module"],
-  "blockIdSuffixes": ["_keycard"],
-  "blockSuffixExempt": ["blank_keycard"],
   "ignoreTags": ["UI_SELECTED_TAG"]
 }
 不写则用代码默认，

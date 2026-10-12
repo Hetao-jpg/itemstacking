@@ -164,7 +164,10 @@ public partial class Main
             //   ⚠️ 坑（坏样本自检抓出）：忽略名单非空时，两方「被忽略的 key 数量」可以不同，
             //   此时 Count 不等也可能是相等状态（如 a={E}，b={E,UI_SEL_TAG}）⇒ 不能提前 return false。
             if (da.Count != db.Count && (_ignoredTagSet == null || _ignoredTagSet.Count == 0))
+            {
+                DiagStateDiff(a, b, "(key 数量不同) da=" + da.Count + " db=" + db.Count);
                 return false;
+            }
 
             // 正向：a 的每个【未被忽略】key，b 必须也有且 TagState 相等。
             foreach (var kv in da)
@@ -174,8 +177,16 @@ public partial class Main
                 if (IsStateTagIgnored(key)) continue;
 
                 // 严格相等：a 有的 key，b 必须也有（否则判不等）。
-                if (!db.TryGetValue(key, out var vb)) return false;
-                if (!TagStateEqual(kv.value, vb)) return false;
+                if (!db.TryGetValue(key, out var vb))
+                {
+                    DiagStateDiff(a, b, "b 缺少 tag「" + key + "」");
+                    return false;
+                }
+                if (!TagStateEqual(kv.value, vb))
+                {
+                    DiagStateDiff(a, b, "tag「" + key + "」值不同：" + DescribeTagState(kv.value) + " vs " + DescribeTagState(vb));
+                    return false;
+                }
             }
 
             // 反向：b 的每个【未被忽略】key，a 必须也有。
@@ -185,7 +196,11 @@ public partial class Main
                 string key = kv.key;
                 if (key == null) continue;
                 if (IsStateTagIgnored(key)) continue;
-                if (!da.ContainsKey(key)) return false;
+                if (!da.ContainsKey(key))
+                {
+                    DiagStateDiff(a, b, "a 缺少 tag「" + key + "」");
+                    return false;
+                }
             }
 
             // 被忽略的 key 不参与相等语义：一侧被 UI 选中、另一侧没有，仍视为状态相同。
@@ -201,6 +216,39 @@ public partial class Main
                 _stateCmpTicks += dt;
             }
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  状态差异定位诊断（2026-10-12）：
+    //  实测发现「同名物品也被判状态不同」（如 tutorial_page / tutorial_page），
+    //  但旧实现只返回布尔、不告诉你差在哪个 tag —— 排查时只能靠猜。
+    //  本诊断在【判不等】时打印具体差异 tag（key + 两侧值），受 DiagOn 总闸控制，
+    //  并按「物品 id 对 + 差异 key」限流（同一差异只打一次），避免拖放探测刷屏。
+    // ──────────────────────────────────────────────────────────────────────
+    private static void DiagStateDiff(GameItem a, GameItem b, string detail)
+    {
+        if (!DiagOn) return;
+        string idA = null, idB = null;
+        try { idA = a?.identifier; } catch { }
+        try { idB = b?.identifier; } catch { }
+        DiagRate("state.diff." + idA + "/" + idB + "|" + detail, 3,
+            $"[状态差异] {idA} / {idB}：{detail}");
+    }
+
+    // 单个 TagState 的可读描述（差异定位用；7 个值字段里挑"非默认"的那个打出来）。
+    private static string DescribeTagState(TagState x)
+    {
+        if (x == null) return "<null>";
+        // 只报"非默认"字段，避免每次都打满 7 个字段刷屏。
+        var parts = new System.Text.StringBuilder();
+        if (x.valueEnabled) parts.Append("enabled");
+        if (x.valueInt != 0) parts.Append(parts.Length > 0 ? "," : "").Append("int=").Append(x.valueInt);
+        if (x.valueLong != 0) parts.Append(parts.Length > 0 ? "," : "").Append("long=").Append(x.valueLong);
+        if (x.valueBool) parts.Append(parts.Length > 0 ? "," : "").Append("bool=true");
+        if (x.valueFloat != 0f) parts.Append(parts.Length > 0 ? "," : "").Append("float=").Append(x.valueFloat);
+        if (x.valueDouble != 0d) parts.Append(parts.Length > 0 ? "," : "").Append("double=").Append(x.valueDouble);
+        if (!string.IsNullOrEmpty(x.internalValueString)) parts.Append(parts.Length > 0 ? "," : "").Append("str=").Append(x.internalValueString);
+        return parts.Length == 0 ? "<空>" : parts.ToString();
     }
 
     // 单个 TagState 的严格相等（7 个值字段 + 7 字段两两比）。
@@ -223,36 +271,5 @@ public partial class Main
         if (!string.Equals(x.internalValueString, y.internalValueString, StringComparison.Ordinal))
             return false;
         return true;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  耗时统计（§三 3.5）
-    //   DiagLog=true 时每 5 秒打印「状态比较调用 X 次 / 累计 Y ms / 平均 Z µs」。
-    //   使「是否卡」有数据而非感觉。
-    // ══════════════════════════════════════════════════════════════════════
-    private static long _stateCmpCalls;
-    private static long _stateCmpTicks;
-    private static float _stateCmpLastReport;
-
-    // 只在 DiagLog 开着时才计时（避免正常游玩时白付 Stopwatch 成本）。
-    private static bool _stateCmpTimingOn => DiagOn;
-
-    private static void ReportStateCmpTiming()
-    {
-        if (!DiagOn) return;
-        float now = UnityEngine.Time.realtimeSinceStartup;
-        if (_stateCmpLastReport <= 0f) { _stateCmpLastReport = now; return; }
-        if (now - _stateCmpLastReport < 5f) return;
-        _stateCmpLastReport = now;
-
-        long calls = _stateCmpCalls;
-        long ticks = _stateCmpTicks;
-        _stateCmpCalls = 0;
-        _stateCmpTicks = 0;
-        if (calls == 0) return;
-
-        double ms = ticks * 1000.0 / Stopwatch.Frequency;
-        double us = ms * 1000.0 / calls;
-        Log?.Msg($"[状态比较·耗时] 最近 5 秒：调用 {calls} 次 / 累计 {ms:F2} ms / 平均 {us:F2} µs。");
     }
 }

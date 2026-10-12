@@ -12,7 +12,7 @@ namespace ItemStacking;
 public partial class Main
 {
     // ── P1：补丁目标自检 ──
-    // 字符串式 Harmony 补丁（MaxNumAdd / StartDrag / OnAfterDeserialize）在游戏
+    // 字符串式 Harmony 补丁（MaxNumAdd / StartDrag）在游戏
     // 改名对应方法时会「静默失效」（Harmony 仅告警，功能无提示消失）。
     // 这里在 PatchAll 后逐一用 AccessTools 复核目标方法是否存在，缺失则明确告警。
     private static void ValidatePatches()
@@ -55,7 +55,7 @@ public partial class Main
         Check(typeof(GameItem), nameof(GameItem.GetStackSlot), new[] { typeof(GameItem) }, "GetStackSlot");
         Check(typeof(GameItem), nameof(GameItem.MaxNumRemove), Type.EmptyTypes, "MaxNumRemove");
         Check(typeof(GameItem), "MaxNumAdd", new[] { typeof(SlotMarker) }, "MaxNumAdd(SlotMarker)");
-        Check(typeof(SaveItemNode), "OnAfterDeserialize", Type.EmptyTypes, "SaveItemNode.OnAfterDeserialize");
+        // （原 SaveItemNode.OnAfterDeserialize 自检随「读档补满」功能一并删除，2026-10-12）
         Check(typeof(ItemMouseDragHandler), "StartDrag", Type.EmptyTypes, "ItemMouseDragHandler.StartDrag");
         // 3.4 #3：IsContainer 依赖 FindAllChildItems —— 若游戏改名此方法，容器防护会「静默失效」
         // （比补丁失效更危险：不报错却允许合并容器，导致内部物品丢失）。此处一并纳入自检。
@@ -123,7 +123,8 @@ public partial class Main
         //   isQuickTransfer（复位快移开关）、quickTransferKey（判定是否松开快移键）。
         //   游戏改名 ⇒ 清理静默失效 → 复现「再按 Alt 还搬 / 单点左键也搬」bug，而自检仍报通过。
         // ★ 0.12.0：按键分派读 handler.key；三个 handler 都要查（任一缺失 ⇒ 该 handler 分派失效）。
-        CheckMember(typeof(InputActionManager), "ResetAfter", "InputActionManager.ResetAfter(Alt快移尾部清理)");
+        Check(typeof(InputActionManager), nameof(InputActionManager.ResetAfter),
+              new[] { typeof(InputActionHandler) }, "InputActionManager.ResetAfter(Alt快移尾部清理)");
         CheckMember(typeof(ItemQuickTransferAltHandler), "currentItem", "ItemQuickTransferAltHandler.currentItem(Alt尾部清空)");
         CheckMember(typeof(ItemQuickTransferAltHandler), "isQuickTransfer", "ItemQuickTransferAltHandler.isQuickTransfer(Alt尾部复位)");
         CheckMember(typeof(ItemQuickTransferAltHandler), "quickTransferKey", "ItemQuickTransferAltHandler.quickTransferKey(Alt尾部判据)");
@@ -279,10 +280,14 @@ public partial class Main
             }
             else
             {
-                Log.Warning($"[名单自检] 内置黑名单里有 {missing.Count} 项 id 在物品目录中查不到" +
-                            "（游戏可能已改名/删除这些物品 ⇒ 相关拦截【静默失效】）：\n  - " +
-                            string.Join("\n  - ", missing) +
-                            $"\n（目录文件：{path}；供参照，不影响运行。）");
+                // ★ 文案修正（2026-10-12）：这些「查不到」的 id 绝大多数是【目录文件 item_catalog.json
+                //   不全/旧版】（如酿酒 DLC 的 be_* 物品），不代表游戏里真的没有、也不代表拦截失效。
+                //   拦截靠 identifier 精确匹配，物品在游戏里存在就能拦，与目录文件无关。
+                //   故降级为 Msg（非故障），并如实说明「需用最新目录文件核对」。
+                Log.Msg($"[名单自检] 内置黑名单有 {missing.Count} 项 id 在目录文件里查不到" +
+                        "（多为目录文件不全/旧版所致，不代表物品不存在、不影响拦截；" +
+                        "如需精确核对，请更新 Mods\\item_catalog.json）:\n  - " +
+                        string.Join("\n  - ", missing));
             }
         }
         catch (Exception e)

@@ -103,18 +103,15 @@ public partial class Main
     //       · 鉴定/赃物/未拥有/动物/鼠 均为 state tag
     //      ⇒ 9 条类判据是状态比较的【真子集】⇒ 永久停用（本方法不再调用它们）。
     //
-    //   ② 【按 id 黑名单 ★ 恢复】：实测发现 id 黑名单【不是】状态比较的替代品 ——
-    //      同 id 的 node*/module*/neural_core/*_keycard/文书类，state 可能完全相同
-    //      （如两个无附加效果的同名节点、两份同版本文书），各自却有独立内容/进度，
-    //      合并即丢失（用户 2026-10-11 实测：节点合并后丢失「辅助节点」tag/状态）。
-    //      ⇒ 恢复按 id 黑名单（内置 id + 前缀 node* + 子串 module/neural_core + 后缀 *_keycard + 自定义）。
+    //   ② 【按 id 黑名单 ★ 2026-10-12 注释停用】：用户要求停用内置 id 黑名单
+    //      （node*/module*/neural_core/*_keycard/文书类等）。停用后仅 cfg 自定义
+    //      ItemBlacklist 仍生效。恢复方法：把下方内置段的 #if false 改回 #if true。
     //
     //  ── 现状 ──
     //   · 类判据：停用（状态闸门承担）。
-    //   · id 黑名单：★ 恢复生效。
-    //   · 物品白名单（ItemWhitelist）：★ 随之失效 —— 它原本唯一的作用是「豁免类判据」，
-    //     而类判据已停用，故现在填了也不改变行为（仅保留以兼容旧 cfg）。
-    //     对 id 黑名单【不翻案】（死命令）。
+    //   · 内置 id 黑名单：★ 停用（2026-10-12，见方法头②）。
+    //   · 自定义 ItemBlacklist：仍生效。
+    //   · 物品白名单（ItemWhitelist）：★ 已删除（2026-10-12，原本就无实际作用）。
     // ══════════════════════════════════════════════════════════════════════
     private static string GetBlacklistReason(GameItem a, GameItem b)
     {
@@ -123,39 +120,16 @@ public partial class Main
             if (_stackBlacklist != null && !_stackBlacklist.Value) return null;   // 总闸关闭
 
             // ══════════ 类判据：永久停用（状态闸门已覆盖，见方法头①）══════════
-            // 源码保留于此供取证/回滚参考，不再执行（1.0.0 对比实验定稿）。
-#if false
-            bool whitelisted = IsWhitelisted(a) || IsWhitelisted(b);
-            if (!whitelisted)
-            {
-                if (IsTagSafe(a, "INSPECTABLE_TAG") || IsTagSafe(b, "INSPECTABLE_TAG") ||
-                    IsTagSafe(a, "APPRAISAL_ITEM")  || IsTagSafe(b, "APPRAISAL_ITEM"))
-                    return "可鉴定物品";
-                if (IsTagSafe(a, "STOLEN_TAG") || IsTagSafe(b, "STOLEN_TAG"))
-                    return "赃物";
-                if (IsTagSafe(a, "ANIMAL_ITEM_TAG") || IsTagSafe(b, "ANIMAL_ITEM_TAG"))
-                    return "活体动物";
-                if (IsSpecies(a, "ANIMAL_RAT") || IsSpecies(b, "ANIMAL_RAT"))
-                    return "鼠";
-                if (!IsTagSafe(a, "IS_OWNED_TAG") || !IsTagSafe(b, "IS_OWNED_TAG"))
-                    return "未拥有物品";
-                {
-                    int? ca = GetTagIntSafe(a, "power_source_item_energy");
-                    int? cb = GetTagIntSafe(b, "power_source_item_energy");
-                    if (ca.HasValue && cb.HasValue && ca.Value != cb.Value)
-                        return "电池电量不同";
-                }
-                if (IsWineBottle(a) || IsWineBottle(b))
-                    return "酒瓶";
-                if (IsDurable(a) || IsDurable(b))
-                    return "耐久物品";
-                if (IsLiquidContainer(a) || IsLiquidContainer(b))
-                    return "液体容器";
-            }
-#endif
+            // 历史（≤0.10）：9 条类判据（可鉴定/赃物/未拥有/电量/动物/鼠/酒瓶/耐久/液体容器）
+            // 已于 1.0.0 永久停用 —— 它们是状态一致性闸门的真子集，见 MergePolicy.Evaluate 1.5。
+            // 若需回滚，见 git 历史：HEAD dc3d11a 版 StackGates.cs 的 #if false 块。
             // ══════════════════════════════════════════════════════════════════
 
-            // 0.6.1：按 id 黑名单（特定物品）。★ 1.0.0：恢复生效（见方法头②）。
+            // ══════════ 内置 id 黑名单：2026-10-12 用户要求【恢复启用】═══════════
+            //   恢复模组/节点/钥匙卡/文书类等按 id 拦截（尤其 module/node/neural_core 模组类）。
+            //   若需再次停用：把 #if true 改回 #if false 重新编译。
+#if true
+            // 0.6.1：按 id 黑名单（特定物品）。
             // ⚠️ 硬编码 id 的脆弱性：identifier 由配置提供、来源为游戏 0.46D 物品目录。
             //    游戏若改名，相关拦截会【静默失效】（无报错）；用 DiagLog 可观测是否命中。
             //
@@ -204,6 +178,8 @@ public partial class Main
                      !IsSuffixExempt(pb)))
                     return "按 id 后缀黑名单·内置（*" + suffix + "）";
             }
+#endif
+            // ══════════════════════════════════════════════════════════════════
 
             if (_itemBlacklist != null && !string.IsNullOrWhiteSpace(_itemBlacklist.Value))
             {
@@ -239,59 +215,8 @@ public partial class Main
         return false;
     }
 
-    // ★ 0.8.0：物品白名单判定（identifier 精确匹配，忽略大小写）。
-    //   白名单留空 = 不豁免任何物品。纯字符串比较，异常不可能发生，无需 try。
-    private static bool IsWhitelisted(GameItem it)
-    {
-        if (it == null || _itemWhitelist == null || string.IsNullOrWhiteSpace(_itemWhitelist.Value))
-            return false;
-        var id = it.identifier;
-        if (string.IsNullOrEmpty(id)) return false;
-        foreach (var raw in _itemWhitelist.Value.Split(','))
-        {
-            var w = raw.Trim();
-            if (w.Length == 0) continue;
-            if (string.Equals(id, w, StringComparison.OrdinalIgnoreCase)) return true;
-        }
-        return false;
-    }
-
-    // ── 0.7.1 探针：非 Alt 路径的落点快照（定位「转场景回商店只带 1 个」）──
-    //
-    // 为什么需要：用户的「跨场景转移只搬 1 个」现象有三种可能成因，必须用实测区分：
-    //   ① 原生 `TryFindOneValidInventorySlot` 本来就只给 `numTransfer = 1`
-    //      （例如目标堆已满 / 委托把上限压成 1）；
-    //   ② 原生给了 >1，但下游（`SlotMarker.TryAcceptOnce` 的闸门 / `MaxNumRemove`）把它吃成 1；
-    //   ③ 我们的 Alt 钳制泄漏（`AltTransferScope` 意外为真）。
-    // 本探针只在**非 Alt** 路径、且「**源堆有多件、但原生只给 1 件**」
-    // （`item.unitCount > 1 && numTransfer == 1`）时记录 —— 这正是「只搬 1 个」的特征。
-    // 按「容器指针 + numTransfer + item」去重，最多 40 条。
-    //   · 命中条目 ⇒ 说明**原生本身就只给 1 件**（问题在抬升点：MaxNumAdd / 委托），
-    //     而不是下游闸门吃掉的。
-    private static readonly HashSet<string> _nonAltProbed = new HashSet<string>(StringComparer.Ordinal);
-
-    private static void ProbeNonAltMarker(GameItem item, SlotMarker result)
-    {
-        try
-        {
-            if (!DiagOn) return;                                  // 0.9.0：诊断总闸
-            if (item == null || item.unitCount <= 1) return;      // 只看"本来该搬多件"的
-            if (result.numTransfer != 1) return;                  // 只看"只给 1 件"的
-            if (_nonAltProbed.Count >= 40) return;
-
-            string key = Ptr(result.inventory).ToString("X") + "|" + SafeId(item);
-            if (!_nonAltProbed.Add(key)) return;
-
-            string invId;
-            try { invId = SafeId(result.inventory); } catch { invId = "?"; }
-            Log?.Msg($"[转场探针] 非Alt落点只给1件：item={SafeId(item)} ×{item.unitCount}，" +
-                     $"容器id={invId}，targetItem={SafeId(result.targetItem)}，numTransfer={result.numTransfer}");
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-        }
-    }
+    // （原「物品白名单 IsWhitelisted」已随 ItemWhitelist 配置项一并删除，2026-10-12；
+    //   其唯一调用点是上方已删除的 #if false 类判据停用块，见 git 历史 dc3d11a。）
 
     // 只读判 tag 是否存在（官方 IsTag，纯查询、不创建、无副作用）。null 视为 false。
     private static bool IsTagSafe(GameItem it, string tag)
@@ -506,58 +431,6 @@ public partial class Main
         return $"id={(string.IsNullOrEmpty(id) ? "<空>" : id)} 槽位={slot} 所属={owner}";
     }
 
-    // ── 作用域探针：把「实际遇到过的容器 id」一次性列出来 ──
-    // 为什么需要：0.9.1 实机日志证实 GameInventory.identifier 几乎全空，
-    //   用户无法靠 id 配置白名单；探针补 槽位/所属/内含 三路信息，
-    //   让用户直接抄成 slot:… / owner:… token（0.9.2）。
-    // 本探针把每个**实际出现过**的容器实例去重打一行：
-    //   序号 / id / 类名 / 指针 / 槽位 / 所属 / 内含 / 本次角色 /
-    //   当前是否落在 ContainerWhitelist 内 ⇒ 走一圈场景就能抄全名单。
-    // 开销：DiagLog=false 时第一行就 return（零开销）；开启时每个容器实例只打一次，
-    //   达到 40 条上限后停（并提示可能还有容器没记到）。
-    private static readonly HashSet<long> _scopeProbed = new HashSet<long>();
-    private const int ScopeProbeMax = 64;   // 0.9.1：40 → 64（多 mod 场景容器更多，上限到了会漏）
-
-    private static void ProbeScopeInventory(GameInventory inv, string role)
-    {
-        try
-        {
-            if (!DiagOn) return;
-            if (inv == null) return;
-            long key = Ptr(inv);
-            if (key == 0L) return;
-            if (_scopeProbed.Count >= ScopeProbeMax)
-            {
-                if (_scopeProbed.Count == ScopeProbeMax)
-                {
-                    _scopeProbed.Add(-1L);   // 借一个保留 key 打「已达上限」提示，只打一次
-                    Log.Msg($"[作用域探针] 已达 {ScopeProbeMax} 条上限，可能还有容器没记录到。" +
-                             "把 ContainerWhitelist 填成「要允许堆叠的那几个」即可，其余一律禁堆。");
-                }
-                return;
-            }
-            if (!_scopeProbed.Add(key)) return;
-
-            string id;
-            try { id = inv.identifier; } catch { id = null; }
-            bool inList = IsContainerWhitelisted(inv);
-            bool inBlack = false;
-            try
-            {
-                if (_containerBlacklist != null && !string.IsNullOrWhiteSpace(_containerBlacklist.Value))
-                    inBlack = IsContainerInList(inv, _containerBlacklist.Value);
-            }
-            catch { }
-            Log.Msg($"[作用域探针] {_scopeProbed.Count,3} 号容器：{DescribeContainer(inv)}" +
-                     $"  角色={role}  白名单内={(inList ? "是" : "否")}  黑名单内={(inBlack ? "是" : "否")}");
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("scopeprobe", $"[作用域探针] 输出失败: {e.Message}");
-        }
-    }
-
     // 0.9.1：容器完整描述 —— identifier 常为空（运行时创建的柜台/背包格），
     // 单靠 id 无法区分容器，所以补三路判据：
     //   ① EmporiumEntry 槽位名（指针比对，交易场景 8 个已知容器）；
@@ -638,14 +511,14 @@ public partial class Main
         try { eHidden = entry.hiddenElement; } catch { }
         try { eBazar = entry.bazarLeftinvElement; } catch { }
 
-        if (SameInventory(inv, eInv)) return SlotMainInv;
-        if (SameInventory(inv, eShow)) return SlotShowcase;
-        if (SameInventory(inv, eFront)) return SlotFrontCounter;
-        if (SameInventory(inv, eBack)) return SlotBackCounter;
-        if (SameInventory(inv, eBackC)) return SlotCounterExtra;
-        if (SameInventory(inv, eSold)) return SlotSold;
-        if (SameInventory(inv, eHidden)) return SlotHidden;
-        if (SameInventory(inv, eBazar)) return SlotBazar;
+        if (SameNativePointer(inv, eInv)) return SlotMainInv;
+        if (SameNativePointer(inv, eShow)) return SlotShowcase;
+        if (SameNativePointer(inv, eFront)) return SlotFrontCounter;
+        if (SameNativePointer(inv, eBack)) return SlotBackCounter;
+        if (SameNativePointer(inv, eBackC)) return SlotCounterExtra;
+        if (SameNativePointer(inv, eSold)) return SlotSold;
+        if (SameNativePointer(inv, eHidden)) return SlotHidden;
+        if (SameNativePointer(inv, eBazar)) return SlotBazar;
         return "<不在EmporiumEntry内>";
     }
 
@@ -821,9 +694,9 @@ public partial class Main
             try { eBack = entry.backInvinvElement; } catch { }
             try { eBackC = entry.backInvinvElementCounter; } catch { }
 
-            if (SameInventory(inv, eFront)) return true;
-            if (SameInventory(inv, eBack)) return true;
-            if (SameInventory(inv, eBackC)) return true;
+            if (SameNativePointer(inv, eFront)) return true;
+            if (SameNativePointer(inv, eBack)) return true;
+            if (SameNativePointer(inv, eBackC)) return true;
             return false;
         }
         catch (Exception e)
@@ -835,81 +708,8 @@ public partial class Main
         }
     }
 
-    // ── 0.6.6 探针：把「本次合并落点容器 vs EmporiumEntry 各容器」打到日志（每容器只打一次）──
-    //   为什么保留：柜台容器是运行时创建的，静态分析拿不到 identifier；万一 0.6.6 的
-    //   front/back/counter 三格判据仍与实机不符，这一行能一次性给出对齐所需的全部信息
-    //   （落点容器 identifier + 指针，与 EmporiumEntry 8 个候选容器的 identifier + 指针并列）。
-    //   只在「真实合并」时触发，且同一容器只打一次，对正常游玩无性能影响。
-    private static readonly HashSet<long> _counterProbed = new HashSet<long>();
-
-    private static void DumpCounterProbeOnce(GameInventory slotInv)
-    {
-        try
-        {
-            if (!DiagOn) return;                       // 0.9.0：诊断总闸
-            long key = Ptr(slotInv);
-            if (!_counterProbed.Add(key)) return;      // 同一个容器只打一次
-            if (_counterProbed.Count > 12) return;     // 防御：最多 12 条
-
-            var entry = EmporiumEntry.Instance;
-            if (entry == null) { Log.Msg("[柜台探针] 本次合并落点容器 = " + Describe(slotInv) +
-                                         "（EmporiumEntry.Instance = null，非交易场景）"); return; }
-
-            Log.Msg("[柜台探针] 本次合并落点容器 = " + DescribeContainer(slotInv) +
-                    "  || EmporiumEntry 容器：" +
-                    "invElement="        + DescribeContainer(TryGet(() => entry.invElement)) +
-                    " / showcaseElement="+ DescribeContainer(TryGet(() => entry.showcaseElement)) +
-                    " / frontInvinv="    + DescribeContainer(TryGet(() => entry.frontInvinvElement)) +
-                    " / backInvinv="     + DescribeContainer(TryGet(() => entry.backInvinvElement)) +
-                    " / backCounter="    + DescribeContainer(TryGet(() => entry.backInvinvElementCounter)) +
-                    " / soldElement="    + DescribeContainer(TryGet(() => entry.soldElement)) +
-                    " / hiddenElement="  + DescribeContainer(TryGet(() => entry.hiddenElement)) +
-                    " / bazarLeft="      + DescribeContainer(TryGet(() => entry.bazarLeftinvElement)));
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("counterprobe", $"[柜台探针] 输出失败: {e.Message}");
-        }
-    }
-
-    private static T TryGet<T>(Func<T> f) where T : class
-    {
-        try { return f(); } catch { return null; }
-    }
-
-    private static long Ptr(Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase o)
-    {
-        try { return o == null ? 0L : (long)o.Pointer; } catch { return 0L; }
-    }
-
-    private static string Describe(GameInventory inv)
-    {
-        if (inv == null) return "null";
-        string id;
-        try { id = inv.identifier; } catch { id = "?"; }
-        return "[" + (string.IsNullOrEmpty(id) ? "<空id>" : id) + " @" + Ptr(inv).ToString("X") + "]";
-    }
-
-    // 统一指针相等判据：两个 IL2CPP 包装对象是否指向同一 native 对象（含继承链 —— 柜台窗口下的子容器也算柜台）。
-    //   ★ 用 Il2CppInterop 的 Pointer 比较，避免触发 GetHashCode/Equals 的托管往返。
-    //   ★ 本方法即全工程唯一实现（原 AltPairTransfer.SameNativePtr 已并入此，消除重复判据）。
-    internal static bool SameNativePointer(object a, object b)
-    {
-        if (a == null || b == null) return false;
-        if (ReferenceEquals(a, b)) return true;
-        try
-        {
-            long pa = Ptr(a as Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase);
-            long pb = Ptr(b as Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase);
-            return pa != 0L && pa == pb;
-        }
-        catch { /* Pointer 读取失败 → 视为不同 */ }
-        return false;
-    }
-
-    // 容器等价（语义封装，供容器判据调用）。
-    private static bool SameInventory(GameInventory a, GameInventory b) => SameNativePointer(a, b);
+    // （TryGet / Ptr / SafeId / SameNativePointer / Describe 已抽出至 Il2CppHelpers.cs，
+    //   2026-10-12；原 SameInventory 包装已删除，调用点全部直接改调 SameNativePointer。）
 
     // 合并闸门的统一判定：返回「拒绝原因」，null = 允许。
     // target = 被并进的那一格上的物品（目标堆），source = 要并进去的物品。
