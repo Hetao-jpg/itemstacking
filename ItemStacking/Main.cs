@@ -158,6 +158,13 @@ public partial class Main : MelonMod
     internal static void DiagRate(string key, int maxTimes, string message)
     {
         if (!DiagOn) return;
+        // ★ T3.3（2026-10-12）全局条数上限：_diagCount 是「key → 次数」的字典，key 组合
+        //   （state.diff / maystack.diff / observe.* 拼上 SafeId）可能随会话无限增长 ⇒ 长会话
+        //   内存缓慢上涨。复用 DiagOnce 的 MaxDiagOnce。
+        //   ★ 与 DiagOnce 的写法差异：DiagOnce 打到上限后【未见过的 key】本来也会被
+        //     HashSet.Add 挡掉，所以那边可以直接 return；DiagRate 若同样直接 return，
+        //     会连【已经登记、且还有剩余次数的老 key】一起静默 —— 故只拦【新增 key】。
+        if (!_diagCount.ContainsKey(key) && _diagCount.Count >= MaxDiagOnce) return;
         int n;
         _diagCount.TryGetValue(key, out n);
         if (n >= maxTimes) return;

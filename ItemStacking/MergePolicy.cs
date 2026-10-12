@@ -186,8 +186,6 @@ public partial class Main
         WarnOnce(key, $"[合并决策] {group}判据异常，{action}（后续同类故障不再重复告警，详见 [防护降级]）");
     }
 
-
-
     // 便捷封装：只取布尔「是否允许合并」。Unknown 暂按 Allow（fail-safe 放行，与 0.9.9 一致）。
     //   ★ 阶段2 会把 Unknown 的落点按「数据保护类 = Deny」细化，届时改这一处即可。
     internal static bool EvaluateAllow(in MergeContext ctx, out string reason)

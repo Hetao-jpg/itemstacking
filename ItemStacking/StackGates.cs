@@ -137,47 +137,28 @@ public partial class Main
             //   原因：MelonLoader 的 cfg 写入会把「不含引号且含逗号的字符串」原样裸写，
             //   产生非法 TOML（`BlockItemIds = a,b`）→ 下次 Load 抛 TomlInvalidValueException
             //   → 整份 MelonPreferences.cfg 进入 Fallback 模式 → 所有 mod 的配置全部无法保存。
-            foreach (var id in BuiltinBlockItemIds)
-            {
-                if (string.Equals(a.identifier, id, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(b.identifier, id, StringComparison.OrdinalIgnoreCase))
-                    return "按 id 黑名单·内置（" + id + "）";
-            }
+            //
+            // ★ T3.2（2026-10-12）：下面 4 段【同构 foreach + a/b 双端判定】收敛为
+            //   MatchIdPair(...) 一行一段（helper 见本方法下方 IdMatch / MatchIdPair / MatchesId）。
+            //   等价性：仍是「按模式串外层循环 → 先 a 后 b → 命中即返回」，且把
+            //   【命中的模式串】塞回原因文案 ⇒ 日志格式与合并前逐字节一致。
+            var pat = MatchIdPair(a, b, BuiltinBlockItemIds, IdMatch.Exact);
+            if (pat != null) return "按 id 黑名单·内置（" + pat + "）";
 
             // ★ 0.7.0：按 id 前缀拦截整类（节点 node*）。
             //   判据用 identifier.StartsWith（忽略大小写），null 安全交给 string.IsNullOrEmpty 前置判断。
-            foreach (var prefix in BuiltinBlockIdPrefixes)
-            {
-                var pa = a.identifier;
-                var pb = b.identifier;
-                if ((!string.IsNullOrEmpty(pa) && pa.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
-                    (!string.IsNullOrEmpty(pb) && pb.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
-                    return "按 id 前缀黑名单·内置（" + prefix + "*）";
-            }
+            pat = MatchIdPair(a, b, BuiltinBlockIdPrefixes, IdMatch.Prefix);
+            if (pat != null) return "按 id 前缀黑名单·内置（" + pat + "*）";
 
             // ★ 0.8.1：按 id 子串拦截整类（模组 module / 神经核心 neural_core）。
             //   判据用 identifier.Contains（忽略大小写）—— module 在 system_module_*/farm_module_*/… 的
             //   中间/末尾，前缀匹配抓不到；neural_core 完全不含 module，也要单独子串。
-            foreach (var sub in BuiltinBlockIdContains)
-            {
-                var pa = a.identifier;
-                var pb = b.identifier;
-                if ((!string.IsNullOrEmpty(pa) && pa.IndexOf(sub, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                    (!string.IsNullOrEmpty(pb) && pb.IndexOf(sub, StringComparison.OrdinalIgnoreCase) >= 0))
-                    return "按 id 子串黑名单·内置（*" + sub + "*）";
-            }
+            pat = MatchIdPair(a, b, BuiltinBlockIdContains, IdMatch.Contains);
+            if (pat != null) return "按 id 子串黑名单·内置（*" + pat + "*）";
 
             // ★ 0.7.1：按 id 后缀拦截整类（钥匙卡 *_keycard），带豁免表（blank_keycard 放行）。
-            foreach (var suffix in BuiltinBlockIdSuffixes)
-            {
-                var pa = a.identifier;
-                var pb = b.identifier;
-                if ((!string.IsNullOrEmpty(pa) && pa.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-                     !IsSuffixExempt(pa)) ||
-                    (!string.IsNullOrEmpty(pb) && pb.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-                     !IsSuffixExempt(pb)))
-                    return "按 id 后缀黑名单·内置（*" + suffix + "）";
-            }
+            pat = MatchIdPair(a, b, BuiltinBlockIdSuffixes, IdMatch.Suffix, IsSuffixExempt);
+            if (pat != null) return "按 id 后缀黑名单·内置（*" + pat + "）";
 #endif
             // ══════════════════════════════════════════════════════════════════
 
@@ -213,6 +194,47 @@ public partial class Main
         foreach (var ex in BuiltinBlockSuffixExempt)
             if (string.Equals(id, ex, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  T3.2 · id 匹配模式（2026-10-12）
+    //  把 GetBlacklistReason 里 4 段同构的「foreach + a/b 双端 + 忽略大小写」收敛到一处。
+    //  新增一种匹配方式（如正则）只需在 MatchesId 加一个 case，四个名单自动生效。
+    // ══════════════════════════════════════════════════════════════════════
+    private enum IdMatch { Exact, Prefix, Contains, Suffix }
+
+    // 双端匹配：a、b 任一 identifier 命中模式串即命中，返回【命中的那个模式串】，
+    //   一个都没命中返回 null（调用点据此拼日志原因，保住模式原文）。
+    // exempt = 按【identifier】豁免（后缀表用：blank_keycard 命中 *_keycard 但仍放行）。
+    // 遍历顺序与合并前的 4 段 foreach 逐字一致：模式串外层 → 先 a 后 b → 命中即返回。
+    private static string MatchIdPair(GameItem a, GameItem b, string[] list,
+                                      IdMatch kind, Func<string, bool> exempt = null)
+    {
+        if (list == null) return null;
+        foreach (var pat in list)
+        {
+            var ia = a?.identifier;
+            if (MatchesId(ia, pat, kind) && (exempt == null || !exempt(ia))) return pat;
+            var ib = b?.identifier;
+            if (MatchesId(ib, pat, kind) && (exempt == null || !exempt(ib))) return pat;
+        }
+        return null;
+    }
+
+    // 单串匹配（统一 OrdinalIgnoreCase + null/空安全）。
+    //   ★ 空串一律 false —— 与原 foreach 版等价：模式串来自代码常量（非空），
+    //     故「identifier 为空」在新旧两版里都命中不了。
+    private static bool MatchesId(string id, string pat, IdMatch kind)
+    {
+        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(pat)) return false;
+        switch (kind)
+        {
+            case IdMatch.Exact:    return string.Equals(id, pat, StringComparison.OrdinalIgnoreCase);
+            case IdMatch.Prefix:   return id.StartsWith(pat, StringComparison.OrdinalIgnoreCase);
+            case IdMatch.Contains: return id.IndexOf(pat, StringComparison.OrdinalIgnoreCase) >= 0;
+            case IdMatch.Suffix:   return id.EndsWith(pat, StringComparison.OrdinalIgnoreCase);
+            default:               return false;
+        }
     }
 
     // （原「物品白名单 IsWhitelisted」已随 ItemWhitelist 配置项一并删除，2026-10-12；
@@ -741,29 +763,9 @@ public partial class Main
             return verdict == MergeVerdict.Deny ? reason : null;
         }
 
-        // ══════════ 以下为 0.9.9 旧顺序（回滚用，保留未删）══════════
-        // 1) 柜台（0.6.5 新增，运行时判据）
-        if (IsCounterSlot(slot)) return "交易柜台内禁止堆叠";
-
-        // 2) 容器黑名单（0.6.5 起对快移路径也生效；0.9.3 起 token 匹配）
-        //    ★ 黑名单优先：命中即 return，后续白名单判定不会覆盖（GetMergeGateReason 中
-        //      黑名单在白名单之前 —— 用户 0.9.3 拍板：两个名单同时命中时黑名单赢）。
-        //    双端判定：落点 或 拖起方 任一容器命中即拦。
-        //    只拦「合并」；空槽放置（移动）仍放行（快移进/出黑名单容器的空槽不受限）。
-        var exclude = GetExcludeReason(target, source);
-        if (exclude != null) return exclude;
-
-        // 3) 堆叠作用域（白名单）
-        var scope = GetScopeReason(target);
-        if (scope != null) return scope;
-
-        // 4) 物品黑名单（鉴定/赃物/未拥有/电量/动物/鼠/酒瓶/耐久/液体容器/按id）
-        var block = GetBlacklistReason(target, source);
-        if (block != null) return block;
-
-        // 5) 装了东西的容器禁止合并（与 MayStack 同判据，防数据丢失）
-        if (IsContainer(target) || IsContainer(source)) return "容器（含内部物品）";
-
-        return null;
+        // ══════════ 0.9.9 旧顺序（回滚用，保留未删）══════════
+        //   ★ T2.1 variant B（2026-10-12）：整段原样搬入 MergePolicy.Legacy.cs 的
+        //     LegacyMergeGateReason（柜台 → 排除 → 作用域 → 黑名单 → 容器，顺序与文案未改）。
+        return LegacyMergeGateReason(slot, target, source);
     }
 }
