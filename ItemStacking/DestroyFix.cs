@@ -90,13 +90,13 @@ public partial class Main
             }
 
             // ③ 实在放不下：打警告（不静默丢弃，让用户知道）
-            WarnOnce("remainder",
+            LogOnce("remainder", Level.Warn,
                 $"[销毁修复] 余量 {SafeId(remainder)} ×{remainder.unitCount} 无法归还任何容器！");
         }
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("remainder-ex", $"[销毁修复] 归还余量异常: {e.Message}");
+            LogOnce("remainder-ex", Level.Warn, $"[销毁修复] 归还余量异常: {e.Message}");
         }
     }
 
@@ -127,7 +127,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce(logKey, $"{tag} 拆堆异常（不影响原操作）: {e.Message}");
+            LogOnce(logKey, Level.Warn, $"{tag} 拆堆异常（不影响原操作）: {e.Message}");
             return (null, null);
         }
     }
@@ -143,7 +143,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce(logKey, $"{tag} 归还余量异常: {e.Message}");
+            LogOnce(logKey, Level.Warn, $"{tag} 归还余量异常: {e.Message}");
         }
     }
 
@@ -163,12 +163,12 @@ public partial class Main
             if (f != null) return f.GetValue(slot) as GameItem;
             var p = t.GetProperty("currentItem", F);
             if (p != null) return p.GetValue(slot) as GameItem;
-            WarnOnce("no-currentitem", $"[槽位成员] {t.Name} 无 currentItem 成员（游戏改版？），清槽跳过");
+            LogOnce("no-currentitem", Level.Warn, $"[槽位成员] {t.Name} 无 currentItem 成员（游戏改版？），清槽跳过");
         }
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("get-currentitem", $"[槽位成员] 读 currentItem 异常: {e.Message}");
+            LogOnce("get-currentitem", Level.Warn, $"[槽位成员] 读 currentItem 异常: {e.Message}");
         }
         return null;
     }
@@ -185,12 +185,12 @@ public partial class Main
             if (f != null) { f.SetValue(slot, value); return; }
             var p = t.GetProperty("currentItem", F);
             if (p != null) { p.SetValue(slot, value); return; }
-            WarnOnce("no-currentitem-set", $"[槽位成员] {t.Name} 无 currentItem 可写（游戏改版？），清槽跳过");
+            LogOnce("no-currentitem-set", Level.Warn, $"[槽位成员] {t.Name} 无 currentItem 可写（游戏改版？），清槽跳过");
         }
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("set-currentitem", $"[槽位成员] 写 currentItem 异常: {e.Message}");
+            LogOnce("set-currentitem", Level.Warn, $"[槽位成员] 写 currentItem 异常: {e.Message}");
         }
     }
 
@@ -227,7 +227,7 @@ public partial class Main
                 try { m = AccessTools.Method(t.type, t.method, TwoGameItems); }
                 catch (Exception e) when (e is not OutOfMemoryException and not StackOverflowException) { }
                 if (m != null) yield return m;
-                else WarnOnce("consume-target",
+                else LogOnce("consume-target", Level.Warn,
                     $"[销毁修复] 找不到 {t.type.Name}.{t.method}（游戏改名？该处余量归还失效）");
             }
         }
@@ -303,7 +303,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("ah-transfer", $"[口袋转移] 整堆转移异常（不影响原版单件逻辑）: {e.Message}");
+                LogOnce("ah-transfer", Level.Warn, $"[口袋转移] 整堆转移异常（不影响原版单件逻辑）: {e.Message}");
             }
         }
 
@@ -357,7 +357,7 @@ public partial class Main
             }
             else if (remaining > 0)
             {
-                WarnOnce("pocket-dest-full",
+                LogOnce("pocket-dest-full", Level.Warn,
                     $"[口袋转移] {label} {SafeId(item)} 还剩 {remaining} 件目的地已满，留在口袋");
             }
         }
@@ -410,7 +410,7 @@ public partial class Main
             EnsureResolved();
             if (_target == null)
             {
-                WarnOnce("furnace-lambda",
+                LogOnce("furnace-lambda", Level.Warn,
                     "[熔炉修复] 找不到 _Furnace_b__5（游戏更新改名？），熔炉堆叠销毁修复失效");
                 return false;
             }
@@ -556,7 +556,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("furnace-split", $"[熔炉修复] 拆堆异常（不影响熔炼本身）: {e.Message}");
+                LogOnce("furnace-split", Level.Warn, $"[熔炉修复] 拆堆异常（不影响熔炼本身）: {e.Message}");
             }
         }
 
@@ -571,7 +571,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("furnace-restore", $"[熔炉修复] 归还余量异常: {e.Message}");
+                LogOnce("furnace-restore", Level.Warn, $"[熔炉修复] 归还余量异常: {e.Message}");
             }
         }
     }
@@ -608,7 +608,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("deseq-split", $"[解序器修复] 拆堆异常: {e.Message}");
+                LogOnce("deseq-split", Level.Warn, $"[解序器修复] 拆堆异常: {e.Message}");
             }
         }
 
@@ -656,7 +656,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("deseq-restore", $"[解序器修复] 归还余量异常: {e.Message}");
+                LogOnce("deseq-restore", Level.Warn, $"[解序器修复] 归还余量异常: {e.Message}");
             }
         }
     }

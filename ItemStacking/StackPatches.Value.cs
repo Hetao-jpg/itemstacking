@@ -88,7 +88,7 @@ public partial class Main
                 {
                     // 调用方按 32 位取值，放行必然溢出成负数 ⇒ 钳到上限并告警。
                     total = int.MaxValue;
-                    WarnOnce("valuetotal-overflow",
+                    LogOnce("valuetotal-overflow", Level.Warn,
                         $"整堆计价溢出：{SafeId(__instance)} 单价 {unit} × {count} 已超过 int.MaxValue，" +
                         "已钳到 int.MaxValue（部分高价值堆可能出现计价封顶，请调低堆叠上限）。");
                 }
@@ -121,8 +121,8 @@ public partial class Main
                 if (inv != null && inv.maxSlotRemoveItemFunc != null) return;
                 int before = __result;
                 if (__instance.unitCount > __result) __result = __instance.unitCount;
-                DiagRate("maxnumremove." + SafeId(__instance), 3,
-                    $"MaxNumRemove {__instance.identifier}：{before} -> {__result}（unitCount={__instance.unitCount}）");
+                LogOnce("maxnumremove." + SafeId(__instance), Level.Diag,
+                    $"MaxNumRemove {__instance.identifier}：{before} -> {__result}（unitCount={__instance.unitCount}）", max: 3);
             }
             catch (Exception e)
             {
@@ -164,8 +164,8 @@ public partial class Main
                     // 堆到已有同名堆上：剩余空间抬到新上限
                     int want = StackCap - target.unitCount;
                     if (want > __result) __result = want;
-                    DiagRate("maxnumadd.stack." + SafeId(__instance) + "/" + SafeId(target), 3,
-                        $"MaxNumAdd {__instance.identifier} -> 目标堆 {target.identifier}：{before} -> {__result}（目标 unitCount={target.unitCount}，StackCap={StackCap}）");
+                    LogOnce("maxnumadd.stack." + SafeId(__instance) + "/" + SafeId(target), Level.Diag,
+                        $"MaxNumAdd {__instance.identifier} -> 目标堆 {target.identifier}：{before} -> {__result}（目标 unitCount={target.unitCount}，StackCap={StackCap}）", max: 3);
                 }
                 else if (__result < StackCap)
                 {
@@ -185,8 +185,8 @@ public partial class Main
                     //   numTransfer = StackCap 即可保证一次进格且不超上限。
                     int want = StackCap;
                     if (want > __result) __result = want;
-                    DiagRate("maxnumadd.empty." + SafeId(__instance), 3,
-                        $"MaxNumAdd {__instance.identifier} -> 空槽：{before} -> {__result}（unitCount={__instance.unitCount}，StackCap={StackCap}）");
+                    LogOnce("maxnumadd.empty." + SafeId(__instance), Level.Diag,
+                        $"MaxNumAdd {__instance.identifier} -> 空槽：{before} -> {__result}（unitCount={__instance.unitCount}，StackCap={StackCap}）", max: 3);
                 }
             }
             catch (Exception e)

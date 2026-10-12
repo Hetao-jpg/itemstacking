@@ -142,7 +142,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce(logKey, $"修饰键配对快移异常（{typeName}），本次交还原生: {e.Message}");
+            LogOnce(logKey, Level.Warn, $"修饰键配对快移异常（{typeName}），本次交还原生: {e.Message}");
             return true;
         }
     }
@@ -219,21 +219,21 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("pair-resetafter", $"配对快移尾部 ResetAfter 失败（忽略）: {e.Message}");
+            LogOnce("pair-resetafter", Level.Warn, $"配对快移尾部 ResetAfter 失败（忽略）: {e.Message}");
         }
 
         try { clearCurrentItem(); }             // ★ 核心：清空 currentItem，杜绝「重复再搬一次」
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("pair-clearitem", $"配对快移尾部 currentItem 置空失败（忽略）: {e.Message}");
+            LogOnce("pair-clearitem", Level.Warn, $"配对快移尾部 currentItem 置空失败（忽略）: {e.Message}");
         }
 
         try { resetFlag(); }                    // 与原生一致：仅当本次松开的是快移键时才复位开关
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("pair-resetflag", $"配对快移尾部 isQuickTransfer 复位失败（忽略）: {e.Message}");
+            LogOnce("pair-resetflag", Level.Warn, $"配对快移尾部 isQuickTransfer 复位失败（忽略）: {e.Message}");
         }
     }
 
@@ -314,7 +314,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("pair-owned", $"配对快移归属判定异常，本次交还原生: {e.Message}");
+            LogOnce("pair-owned", Level.Warn, $"配对快移归属判定异常，本次交还原生: {e.Message}");
             return false;
         }
         if (!owned)
@@ -371,7 +371,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("pair-accept", $"配对快移调用原生 TryAcceptOnce 异常，本次不搬: {e.Message}");
+            LogOnce("pair-accept", Level.Warn, $"配对快移调用原生 TryAcceptOnce 异常，本次不搬: {e.Message}");
             return 0;
         }
     }

@@ -69,7 +69,7 @@ public partial class Main
         if (DiagOn) ProbeScopeInventory(instInv, "落点堆所在(MayStack)");   // §七 1.4
         if (instInv != null && IsCounterInventory(instInv))
         {
-            WarnOnce("maystack.counter",
+            LogOnce("maystack.counter", Level.Warn,
                 $"[柜台禁堆] MayStack 已拦截（柜台内不合并，让原生走找空格分支）：" +
                 $"{__instance.identifier} / {otherItem.identifier}");
             __result = false;

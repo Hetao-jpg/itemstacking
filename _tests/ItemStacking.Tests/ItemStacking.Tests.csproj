@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ItemStacking 单元测试（xUnit）。
+    ── 为什么必须引用 mod 本身 ──
+    要测的 WarnOnce / DiagOnce / DiagRate 是 Main（MelonMod 子类）上的静态方法，
+    只能加载 ItemStacking.dll 才能覆盖真实现（不是抄一份逻辑去测）。
+    ── 运行时依赖 ──
+    ItemStacking.csproj 里所有游戏/MelonLoader 引用都是 Private=False（绝不拷进 mod 输出），
+    所以这里要【自己再声明一遍】且不加 Private=False —— 让它们拷进测试输出，
+    否则 CLR 解析 MelonMod / UnityEngine 类型时会 FileNotFound。
+    ── 与 mod 保持一致 ──
+    net6.0 + x64，GamePath 默认值与 mod 相同，可用 -p:GamePath=... 覆盖。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>ItemStacking.Tests</AssemblyName>
+    <RootNamespace>ItemStacking.Tests</RootNamespace>
+    <!-- LogMsgFn 委托签名带 ColorARGB*，记录器必须 unsafe 实现 -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GamePath)' == ''">
+    <GamePath>D:\SteamLibrary\steamapps\common\Probably Stolen Demo</GamePath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <MLNet>$(GamePath)\MelonLoader\net6</MLNet>
+    <MLIl2Cpp>$(GamePath)\MelonLoader\Il2CppAssemblies</MLIl2Cpp>
+  </PropertyGroup>
+
+  <!-- 被测对象 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\ItemStacking\ItemStacking.csproj" />
+  </ItemGroup>
+
+  <!-- 运行时依赖：与 mod 的引用列表一致，但【拷贝到测试输出】 -->
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MLNet)\MelonLoader.dll</HintPath>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MLNet)\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MLNet)\Il2CppInterop.Runtime.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(MLNet)\Il2CppInterop.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2CppInterop.HarmonySupport">
+      <HintPath>$(MLNet)\Il2CppInterop.HarmonySupport.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(MLIl2Cpp)\Il2Cppmscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(MLIl2Cpp)\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(MLIl2Cpp)\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(MLIl2Cpp)\UnityEngine.InputLegacyModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
+    <PackageReference Include="xunit" Version="2.4.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

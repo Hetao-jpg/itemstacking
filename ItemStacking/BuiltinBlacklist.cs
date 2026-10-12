@@ -150,14 +150,14 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("bl.read", $"读取 {BlacklistJsonName} 失败，改用代码默认名单（防护不受影响）：{e.Message}");
+                LogOnce("bl.read", Level.Warn, $"读取 {BlacklistJsonName} 失败，改用代码默认名单（防护不受影响）：{e.Message}");
                 return;
             }
 
             var doc = MiniJson.ParseObject(text);
             if (doc == null)
             {
-                WarnOnce("bl.parse", $"{BlacklistJsonName} 格式非法（应为 JSON 对象），改用代码默认名单（防护不受影响）。");
+                LogOnce("bl.parse", Level.Warn, $"{BlacklistJsonName} 格式非法（应为 JSON 对象），改用代码默认名单（防护不受影响）。");
                 return;
             }
 
@@ -187,7 +187,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             // ★ 兜底：任何意外都退回默认值（字段初值即默认，无需回滚）。
-            WarnOnce("bl.fatal", $"加载 {BlacklistJsonName} 异常，使用代码默认名单（防护不受影响）：{e.Message}");
+            LogOnce("bl.fatal", Level.Warn, $"加载 {BlacklistJsonName} 异常，使用代码默认名单（防护不受影响）：{e.Message}");
         }
     }
 

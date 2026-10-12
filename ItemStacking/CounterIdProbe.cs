@@ -35,7 +35,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             _counterIdDumped = true;   // 出错也别每帧重试
-            WarnOnce("counterid", $"[柜台id] 输出失败: {e.Message}");
+            LogOnce("counterid", Level.Warn, $"[柜台id] 输出失败: {e.Message}");
         }
     }
 }

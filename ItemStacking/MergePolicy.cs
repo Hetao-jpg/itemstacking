@@ -168,7 +168,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             // ★ 阶段2：框架自身异常（非判据内部）—— 保守判 Deny（数据安全优先）。
-            WarnOnce("mergepolicy", $"合并决策框架异常，本次拦截（保守）: {e.Message}");
+            LogOnce("mergepolicy", Level.Warn, $"合并决策框架异常，本次拦截（保守）: {e.Message}");
             reason = "决策框架异常";
             return MergeVerdict.Deny;
         }
@@ -183,7 +183,7 @@ public partial class Main
     {
         string group = protective ? "数据保护类" : "便利类";
         string action = protective ? "本次拦截（宁可拦不可丢）" : "本次放行（不影响游玩）";
-        WarnOnce(key, $"[合并决策] {group}判据异常，{action}（后续同类故障不再重复告警，详见 [防护降级]）");
+        LogOnce(key, Level.Warn, $"[合并决策] {group}判据异常，{action}（后续同类故障不再重复告警，详见 [防护降级]）");
     }
 
     // 便捷封装：只取布尔「是否允许合并」。Unknown 暂按 Allow（fail-safe 放行，与 0.9.9 一致）。

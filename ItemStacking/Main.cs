@@ -139,54 +139,70 @@ public partial class Main : MelonMod
     //  策略：给「成功/放行」类日志加【去重限流】（同一 key 只打一次），
     //  「拦截/异常」类日志【始终输出】—— 实测要抓的正是拦截原因，不能被限掉。
     //  全局上限 MAX_DIAG_ONCE 兜底，防止 key 组合爆炸仍刷屏。
+    //
+    //  T3.1（2026-10-12）：原来的 WarnOnce / DiagOnce / DiagRate 三个方法 + 三个静态集合
+    //  （_warnedOnce / _diagOnce / _diagCount）合并成一个 LogOnce + 一个字典。
+    //  合并最要命的就是「门控搞混」，三种口径必须各自保住：
+    //    · Warn —— 不受 DiagOn 总闸管、无全局上限（防护降级必须无条件出现）；
+    //    · Diag —— 受 DiagOn 总闸管、共用 MaxDiagOnce 上限；
+    //    · 上限 —— 只拦【新增 key】，已登记的老 key 剩余次数照常打。
+    //  key 用 "W:" / "D:" 前缀分开存，避免 Warn 与 Diag 撞 key 互相顶掉。
+    //  这几条分支由 _tests/ItemStacking.Tests/LogGateTests.cs 逐条钉死，改这里先跑测试。
     // ══════════════════════════════════════════════════════════════════════
     private const int MaxDiagOnce = 200;   // 限流日志的全局条数上限（超出后静默丢弃）
-    private static readonly HashSet<string> _diagOnce = new HashSet<string>(StringComparer.Ordinal);
 
-    // 同一 key 只输出一次（热路径放行/成功类日志用）。仍受 DiagOn 总闸控制。
-    internal static void DiagOnce(string key, string message)
-    {
-        if (!DiagOn) return;
-        if (_diagOnce.Count >= MaxDiagOnce) return;
-        if (!_diagOnce.Add(key)) return;
-        Log.Msg("[Diag·限流] " + message);
-    }
+    // 「key → 已输出次数」，Warn / Diag 都进这一个字典，靠前缀区分（见上）。
+    private static readonly Dictionary<string, int> _logOnce = new Dictionary<string, int>(StringComparer.Ordinal);
+    // ★ 只数 Diag 级别的 key：Warn 不占上限额度，否则 Warn 一多会把 Diag 提前限死。
+    private static int _diagKeys;
 
-    // 同一 key 最多输出 maxTimes 次（介于"每次"与"仅一次"之间）。仍受 DiagOn 总闸控制。
-    // 用 key → 已输出次数 计数；超出上限后不再输出、也不再新增 key（避免无限增长）。
-    private static readonly Dictionary<string, int> _diagCount = new Dictionary<string, int>(StringComparer.Ordinal);
-    internal static void DiagRate(string key, int maxTimes, string message)
+    private enum Level { Warn, Diag }
+
+    // 限流日志唯一入口：
+    //   LogOnce("key", Level.Warn, "msg");           // 一次性告警（不看总闸、无上限）
+    //   LogOnce("key", Level.Diag, "msg");           // 一次性诊断（看总闸，至多 1 次）
+    //   LogOnce("key", Level.Diag, "msg", max: 3);   // 至多 3 次
+    private static void LogOnce(string key, Level level, string message, int max = 1)
     {
-        if (!DiagOn) return;
-        // ★ T3.3（2026-10-12）全局条数上限：_diagCount 是「key → 次数」的字典，key 组合
-        //   （state.diff / maystack.diff / observe.* 拼上 SafeId）可能随会话无限增长 ⇒ 长会话
-        //   内存缓慢上涨。复用 DiagOnce 的 MaxDiagOnce。
-        //   ★ 与 DiagOnce 的写法差异：DiagOnce 打到上限后【未见过的 key】本来也会被
-        //     HashSet.Add 挡掉，所以那边可以直接 return；DiagRate 若同样直接 return，
-        //     会连【已经登记、且还有剩余次数的老 key】一起静默 —— 故只拦【新增 key】。
-        if (!_diagCount.ContainsKey(key) && _diagCount.Count >= MaxDiagOnce) return;
+        bool warn = level == Level.Warn;
+        if (!warn && !DiagOn) return;   // 总闸只管 Diag（0.6.2：Warn 无条件输出）
+
+        string bagKey = (warn ? "W:" : "D:") + key;
         int n;
-        _diagCount.TryGetValue(key, out n);
-        if (n >= maxTimes) return;
-        _diagCount[key] = n + 1;
-        Log.Msg("[Diag·限流] " + message);
-    }
-
-    // ── 0.6.2：防护降级「一次性告警」──
-    // 各防护判据（黑名单 / 作用域 / 排除容器 / 容器判定 / 耐久 / 柜台探测）在异常时都走
-    // fail-safe（返回 null/false = 放行），保证游戏能继续玩；但默认 DiagLog=false 时
-    // 用户【完全无感】—— 防护会静默消失，这正是本项目最痛的一类故障。
-    // 这里对「每类判据」只告警一次（HashSet 去重防刷屏），走 Log.Warning 无条件输出。
-    private static readonly HashSet<string> _warnedOnce = new HashSet<string>(StringComparer.Ordinal);
-    private static void WarnOnce(string key, string msg)
-    {
-        if (_warnedOnce.Add(key))
+        if (_logOnce.TryGetValue(bagKey, out n))
         {
+            if (n >= max) return;
+            _logOnce[bagKey] = n + 1;
+        }
+        else
+        {
+            // ★ 全局条数上限：_logOnce 是「key → 次数」的字典，key 组合
+            //   （state.diff / maystack.diff / observe.* 拼上 SafeId）可能随会话无限增长 ⇒
+            //   长会话内存缓慢上涨。复用 MaxDiagOnce。
+            //   ★ 只拦【新增 key】：已经登记、且还有剩余次数的老 key 不能被一起静默。
+            //   （原 T3.3 加在 DiagRate 上的防泄漏口径；合并后对 DiagOnce 同样成立且行为不变 ——
+            //     DiagOnce 的 max 恒为 1，已登记 key 必然 n >= max，本来就会 return。）
+            if (!warn)
+            {
+                if (_diagKeys >= MaxDiagOnce) return;
+                _diagKeys++;
+            }
+            _logOnce[bagKey] = 1;
+        }
+
+        if (warn)
+        {
+            // ── 0.6.2：防护降级「一次性告警」──
+            // 各防护判据（黑名单 / 作用域 / 排除容器 / 容器判定 / 耐久 / 柜台探测）在异常时都走
+            // fail-safe（返回 null/false = 放行），保证游戏能继续玩；但默认 DiagLog=false 时
+            // 用户【完全无感】—— 防护会静默消失，这正是本项目最痛的一类故障。
+            // 这里对「每类判据」只告警一次（去重防刷屏），走 Log.Warning 无条件输出。
             // ★ 0.9.9：MelonLoader 的 HarmonyInit 自动 PatchAll 早于 OnInitializeMelon，
             //   该阶段 Log 还是 null（0.9.8 实机首崩 NRE 根因），退回全局日志。
-            if (Log != null) Log.Warning("[防护降级] " + msg);
-            else MelonLogger.Warning("[防护降级] " + msg);
+            if (Log != null) Log.Warning("[防护降级] " + message);
+            else MelonLogger.Warning("[防护降级] " + message);
         }
+        else Log.Msg("[Diag·限流] " + message);
     }
 
 

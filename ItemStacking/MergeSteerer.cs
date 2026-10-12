@@ -72,7 +72,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             // 导流判据异常 → 不导流（保守：让 MergePolicy 正常决策拦截）。
-            WarnOnce("steerer", $"[导流] 判据异常，本次不导流（交 MergePolicy 决策）: {e.Message}");
+            LogOnce("steerer", Level.Warn, $"[导流] 判据异常，本次不导流（交 MergePolicy 决策）: {e.Message}");
             return false;
         }
     }

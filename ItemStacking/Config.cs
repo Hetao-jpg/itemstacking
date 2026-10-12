@@ -439,7 +439,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("slotmigrate", $"slot token 迁移失败（忽略，行为等同未迁移）: {e.Message}");
+            LogOnce("slotmigrate", Level.Warn, $"slot token 迁移失败（忽略，行为等同未迁移）: {e.Message}");
         }
     }
 
@@ -496,7 +496,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("wl-migrate", $"白名单空值迁移失败（忽略，堆叠可能仍全禁）: {e.Message}");
+            LogOnce("wl-migrate", Level.Warn, $"白名单空值迁移失败（忽略，堆叠可能仍全禁）: {e.Message}");
         }
     }
 }

@@ -70,7 +70,7 @@ public partial class Main
             if (e is OutOfMemoryException || e is StackOverflowException)
                 throw;
             MarkJudgeFault(FaultProtection);   // 阶段2：数据保护类异常 → Evaluate 将判 Deny
-            WarnOnce("container", $"容器判定异常，本次按『非容器』放行（容器内物品丢失防护暂时失效）: {e.Message}");
+            LogOnce("container", Level.Warn, $"容器判定异常，本次按『非容器』放行（容器内物品丢失防护暂时失效）: {e.Message}");
             return false;   // 读取失败时不阻断正常堆叠（★ 注意：MergePolicy 会据故障位置 Deny）
         }
     }
@@ -181,7 +181,7 @@ public partial class Main
             if (e is OutOfMemoryException || e is StackOverflowException)
                 throw;
             MarkJudgeFault(FaultProtection);   // 阶段2：数据保护类异常 → Evaluate 将判 Deny
-            WarnOnce("blacklist", $"黑名单判据异常，本次放行堆叠（按 id 防护暂时失效）: {e.Message}");
+            LogOnce("blacklist", Level.Warn, $"黑名单判据异常，本次放行堆叠（按 id 防护暂时失效）: {e.Message}");
             return null;   // 黑名单读取失败时不阻断正常堆叠（★ MergePolicy 会据故障位 Deny）
         }
     }
@@ -304,7 +304,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("wine", $"酒瓶判据异常，本次放行: {e.Message}");
+            LogOnce("wine", Level.Warn, $"酒瓶判据异常，本次放行: {e.Message}");
             return false;
         }
     }
@@ -318,7 +318,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("durable", $"耐久判据异常，本次按『非耐久』放行: {e.Message}");
+            LogOnce("durable", Level.Warn, $"耐久判据异常，本次按『非耐久』放行: {e.Message}");
             return false;   // 读取失败不阻断（fail-safe）
         }
     }
@@ -365,7 +365,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             MarkJudgeFault(FaultConvenience);   // 阶段2：便利类异常 → Evaluate 将判 Allow
-            WarnOnce("scope", $"堆叠作用域判据异常，本次不阻断: {e.Message}");
+            LogOnce("scope", Level.Warn, $"堆叠作用域判据异常，本次不阻断: {e.Message}");
             return null;   // 作用域判定失败时不阻断
         }
     }
@@ -636,7 +636,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             MarkJudgeFault(FaultConvenience);   // 阶段2：便利类异常 → Evaluate 将判 Allow
-            WarnOnce("exclude", $"容器排除判据异常，本次不阻断: {e.Message}");
+            LogOnce("exclude", Level.Warn, $"容器排除判据异常，本次不阻断: {e.Message}");
             return null;   // 判定失败不阻断
         }
     }
@@ -691,7 +691,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("counterslot", $"柜台判定异常，本次不阻断: {e.Message}");
+            LogOnce("counterslot", Level.Warn, $"柜台判定异常，本次不阻断: {e.Message}");
             return false;
         }
     }
@@ -725,7 +725,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             MarkJudgeFault(FaultConvenience);   // 阶段2：便利类异常 → Evaluate 将判 Allow
-            WarnOnce("counterinv", $"柜台容器判定异常，本次不阻断: {e.Message}");
+            LogOnce("counterinv", Level.Warn, $"柜台容器判定异常，本次不阻断: {e.Message}");
             return false;
         }
     }

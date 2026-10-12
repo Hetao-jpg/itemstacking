@@ -95,7 +95,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("ist.read", $"读取 {BlacklistJsonName} 失败（忽略名单），改用代码默认（防护不受影响）：{e.Message}");
+                LogOnce("ist.read", Level.Warn, $"读取 {BlacklistJsonName} 失败（忽略名单），改用代码默认（防护不受影响）：{e.Message}");
                 return;
             }
 
@@ -118,7 +118,7 @@ public partial class Main
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             // ★ 兜底：任何意外都保证集合非 null（退回默认，防护不丢）。
             try { RebuildIgnoredTagSet(); } catch { }
-            WarnOnce("ist.fatal", $"加载忽略名单异常，改用代码默认（防护不受影响）：{e.Message}");
+            LogOnce("ist.fatal", Level.Warn, $"加载忽略名单异常，改用代码默认（防护不受影响）：{e.Message}");
         }
     }
 
@@ -231,8 +231,8 @@ public partial class Main
         string idA = null, idB = null;
         try { idA = a?.identifier; } catch { }
         try { idB = b?.identifier; } catch { }
-        DiagRate("state.diff." + idA + "/" + idB + "|" + detail, 3,
-            $"[状态差异] {idA} / {idB}：{detail}");
+        LogOnce("state.diff." + idA + "/" + idB + "|" + detail, Level.Diag,
+            $"[状态差异] {idA} / {idB}：{detail}", max: 3);
     }
 
     // 单个 TagState 的可读描述（差异定位用；7 个值字段里挑"非默认"的那个打出来）。

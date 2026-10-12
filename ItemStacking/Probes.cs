@@ -194,7 +194,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("scopeprobe", $"[作用域探针] 输出失败: {e.Message}");
+            LogOnce("scopeprobe", Level.Warn, $"[作用域探针] 输出失败: {e.Message}");
         }
     }
 
@@ -234,7 +234,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("counterprobe", $"[柜台探针] 输出失败: {e.Message}");
+            LogOnce("counterprobe", Level.Warn, $"[柜台探针] 输出失败: {e.Message}");
         }
     }
 
@@ -273,7 +273,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             _modifierKeyDumped = true;   // 出错也别每帧重试
-            WarnOnce("modifierkey", $"[修饰键] 键位探针输出失败: {e.Message}");
+            LogOnce("modifierkey", Level.Warn, $"[修饰键] 键位探针输出失败: {e.Message}");
         }
     }
 }

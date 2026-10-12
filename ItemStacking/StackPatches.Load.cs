@@ -50,8 +50,8 @@ public partial class Main
                 if (ctrl)
                 {
                     __instance.currentRemove = __instance.maxRemove;   // 整堆
-                    DiagRate("startdrag.ctrl", 3,
-                        $"StartDrag Ctrl 整堆：currentRemove={__instance.currentRemove}/{__instance.maxRemove}");
+                    LogOnce("startdrag.ctrl", Level.Diag,
+                        $"StartDrag Ctrl 整堆：currentRemove={__instance.currentRemove}/{__instance.maxRemove}", max: 3);
                     return;
                 }
 
@@ -63,8 +63,8 @@ public partial class Main
                 if (!shift && !alt)
                 {
                     __instance.currentRemove = 1;
-                    DiagRate("startdrag.single", 3,
-                        $"StartDrag 单件：currentRemove=1（maxRemove={__instance.maxRemove}）");
+                    LogOnce("startdrag.single", Level.Diag,
+                        $"StartDrag 单件：currentRemove=1（maxRemove={__instance.maxRemove}）", max: 3);
                 }
             }
             catch (Exception e)

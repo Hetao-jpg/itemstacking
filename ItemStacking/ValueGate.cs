@@ -100,15 +100,15 @@ public partial class Main
                 if (va == null || !string.Equals(va, defVal, StringComparison.Ordinal))
                 {
                     if (DiagOn)
-                        DiagRate("valuegate." + id + "." + tagKey, 3,
-                            $"[值域校验] {id} 的 tag「{tagKey}」偏离默认：当前 {va ?? "<缺>"} ≠ 默认 {defVal} → 拦截");
+                        LogOnce("valuegate." + id + "." + tagKey, Level.Diag,
+                            $"[值域校验] {id} 的 tag「{tagKey}」偏离默认：当前 {va ?? "<缺>"} ≠ 默认 {defVal} → 拦截", max: 3);
                     return false;
                 }
                 if (vb == null || !string.Equals(vb, defVal, StringComparison.Ordinal))
                 {
                     if (DiagOn)
-                        DiagRate("valuegate." + id + "." + tagKey, 3,
-                            $"[值域校验] {id} 的 tag「{tagKey}」偏离默认：当前 {vb ?? "<缺>"} ≠ 默认 {defVal} → 拦截");
+                        LogOnce("valuegate." + id + "." + tagKey, Level.Diag,
+                            $"[值域校验] {id} 的 tag「{tagKey}」偏离默认：当前 {vb ?? "<缺>"} ≠ 默认 {defVal} → 拦截", max: 3);
                     return false;
                 }
             }
@@ -118,7 +118,7 @@ public partial class Main
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             MarkJudgeFault(FaultProtection);
-            WarnOnce("valuegate", $"值域校验异常，本次按「偏离默认」拦截（保守）: {e.Message}");
+            LogOnce("valuegate", Level.Warn, $"值域校验异常，本次按「偏离默认」拦截（保守）: {e.Message}");
             return false;
         }
     }
@@ -152,7 +152,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("valuegate.tpl", $"取默认模板失败（{identifier}），本次按「偏离默认」拦截: {e.Message}");
+            LogOnce("valuegate.tpl", Level.Warn, $"取默认模板失败（{identifier}），本次按「偏离默认」拦截: {e.Message}");
             return null;
         }
 

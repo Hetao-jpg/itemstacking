@@ -121,14 +121,14 @@ public partial class Main
             if (currentItem == null) return;
 
             _altTransferScope++;
-            DiagRate("altenter." + SafeId(currentItem), 3,
+            LogOnce("altenter." + SafeId(currentItem), Level.Diag,
                 $"Alt 快移作用域进入（depth={_altTransferScope}）：{SafeId(currentItem)} ×{currentItem.unitCount}，" +
-                $"本次件数={AltQuickTransferAmount}");
+                $"本次件数={AltQuickTransferAmount}", max: 3);
         }
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("altenter", $"Alt 快移作用域进入异常，本次退回原生整堆行为: {e.Message}");
+            LogOnce("altenter", Level.Warn, $"Alt 快移作用域进入异常，本次退回原生整堆行为: {e.Message}");
         }
     }
 
@@ -333,9 +333,9 @@ public partial class Main
                     if (raised > 1)
                     {
                         __result.numTransfer = raised;
-                        DiagRate("lift." + SafeId(item), 3,
+                        LogOnce("lift." + SafeId(item), Level.Diag,
                             $"[落点抬升] GameGridInventory 硬编码 1 件 → {raised}：" +
-                            $"{SafeId(item)} ×{item.unitCount}（容器 {SafeId(__result.inventory)}，StackCap={StackCap}）");
+                            $"{SafeId(item)} ×{item.unitCount}（容器 {SafeId(__result.inventory)}，StackCap={StackCap}）", max: 3);
                     }
                 }
                 return;
@@ -350,13 +350,13 @@ public partial class Main
             {
                 try
                 {
-                    DiagRate("altlot." + SafeId(item), 3,
+                    LogOnce("altlot." + SafeId(item), Level.Diag,
                         $"[Alt 落点] 命中：item={SafeId(item)} ×{item.unitCount}，" +
                         $"原生结果={( __result == null ? "null" : "有")}" +
                         (__result == null
                             ? ""
                             : $"，targetItem={SafeId(__result.targetItem)}，容器={SafeId(__result.inventory)}" +
-                              $"，numTransfer={__result.numTransfer}"));
+                              $"，numTransfer={__result.numTransfer}"), max: 3);
                 }
                 catch { }
             }
@@ -437,7 +437,7 @@ public partial class Main
         catch (Exception e)
         {
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            WarnOnce("altslot", $"Alt 快移落点改写异常，本次退回原生落点: {e.Message}");
+            LogOnce("altslot", Level.Warn, $"Alt 快移落点改写异常，本次退回原生落点: {e.Message}");
         }
     }
     }
@@ -508,7 +508,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("ctrlenter", $"Ctrl 快移作用域进入异常，本次退回原生: {e.Message}");
+                LogOnce("ctrlenter", Level.Warn, $"Ctrl 快移作用域进入异常，本次退回原生: {e.Message}");
             }
         }
 
@@ -571,7 +571,7 @@ public partial class Main
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                WarnOnce("ctrlgate", $"Ctrl 快移合并闸门异常，本次放行合并: {e.Message}");
+                LogOnce("ctrlgate", Level.Warn, $"Ctrl 快移合并闸门异常，本次放行合并: {e.Message}");
                 return true;
             }
         }
