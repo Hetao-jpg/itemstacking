@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using Il2Cpp;
 using MelonLoader;
 
 namespace ItemStacking;
@@ -47,9 +48,9 @@ public partial class Main
         // ★ 0.7.1「能量电池」系列（用户："空电池加入黑名单"）。
         //   目录里没有叫"空电池"的物品：满电/空电共用同一 id，靠 power_source_item_energy tag 区分。
         //   ⇒ 整类拦（不分满电空电），最可靠。三个 id 覆盖全部能量电池。
-        "energy_credit", "energy_credit_ext", "energy_credit_breeder",
+        // "energy_credit", "energy_credit_ext", "energy_credit_breeder",
         // ★ 0.7.1「莓果」（用户：果实 + 种子 + 果酿）。
-        "wine_berry",                                       // 荧光莓（果实）
+        // "wine_berry",                                       // 荧光莓（果实）
         "stardust_berry_fruit",                             // 星尘莓（果实）
         "bloomberry_seed",                                  // 花莓种子
         "wine_bloomberry", "wine_gloomberry",               // 荧光莓果酿 / 阴光莓果酿
@@ -62,7 +63,7 @@ public partial class Main
         //   拦的理由：金属锭带 INGOT_PURITY_TAG / INGOT_PURITY_*（纯度分
         //   PERFECT/VERY_HIGH/HIGH/FAIR/LOW/VERY_LOW/INCONCLUSIVE/FAKE），
         //   每块锭的纯度是各自独立状态，合并后除第一块外全部按第一块结算。
-        "metal_ingot",
+        // "metal_ingot",
         // ★ 0.9.5：文档/纸质类整类拦截（用户 2026-10-10 要求，便于分享 DLL 时默认生效）。
         //   拦的理由：文档/指南/名片/证书/彩票/配方手札等每件是独立内容（编号/图案/可刮开），
         //   合并后除第一件外其余内容不可见，且交易/使用时按同一种结算，属误合并高发区。
@@ -106,7 +107,71 @@ public partial class Main
     private static readonly string[] DefaultBlockIdSuffixes = { "_keycard" };
 
     // 后缀黑名单的豁免表（后缀命中但放行）——空白钥匙卡 blank_keycard。
-    private static readonly string[] DefaultBlockSuffixExempt = { "blank_keycard" };
+    private static readonly string[] DefaultBlockSuffixExempt = { Constants.SuffixExemptBlankKeycard };
+
+    // ──────────────────────────────────────────────────────────────────────
+    // ★ 机器容器名单（方案 v2「机器容器拦截」· §四 machine_container_detection）
+    //   机器容器内不允许堆叠合并（MergePolicy.Deny），且每格每次只放 1 件（MaxNumAdd 钳 1）。
+    //   原版机器逻辑假设 unitCount == 1，堆入堆叠物品会触发崩坏/丢件；
+    //   在入口拆堆（前置）是治本方案——机器内部永远看不到 unitCount > 1。
+    //   token 复用 IsContainerInList 的三路匹配（裸 id / slot: / owner:，见 StackGates.cs），
+    //   与 ContainerWhitelist / ContainerBlacklist 共用同一套判据；前缀用 Constants 常量。
+    //   ★ 名单来源（RE1 反汇编取证，2026-10-12，详见仓库根《机器容器identifier中英文对照表.md》）：
+    //     · FurnitureItemDirectory/HusbandryDirectory 等 InitDirectory 注册的机器 id；
+    //     · Machine* 组件 CreateTooltip / 工厂方法引用的 id（数据表定义类）；
+    //     · 仅纳入【有物品输入格且有 unitCount 崩坏实证或单件假设风险】的机器。
+    //   ★ 有意排除（详见对照表 §二）：fridge / recharger / cassette_player / machine_bay* 等
+    //     储物型（默认白名单已在用、无崩坏证据，纳入会改变现行堆叠玩法——R8 回归风险）；
+    //     security_alarm / mirage_projector / deal_maker 等无物品输入格的机器。
+    //   ★ v2 方案里的 brewing_barrel / incubator / concentrator / crafting_table 为
+    //     占位符（目录核对不存在，系编造 id），不写入默认名单。
+    //   外置覆盖：Mods\item_blacklist.json 的 "machineContainers" 字段（缺省=本默认，
+    //   []=显式清空关闭，非空=整组覆盖）——遵循本文件「代码默认值 + 可选覆盖」双层语义。
+    private static readonly string[] DefaultMachineContainerTokens =
+    {
+        "owner:furnace",                    // 熔炉（Furnace）—— DestroyFix.Patch_FurnaceConsume 已修，崩坏实证
+        "owner:desequencer",                // 密码解序器（Cryptographic Desequencer）—— DestroyFix.Patch_FinishDesequencer 已修
+        "owner:bottle_printer",             // 水瓶打印机（Bottle Printer）—— DestroyFix.Patch_BottlePrinterUpgradePrinter 已修
+        "owner:box_dispenser",              // 箱子分配器（Box Dispenser）
+        "owner:moisture_farm",              // 水分收集器（Moisture Farm）
+        "owner:water_purifier",             // 净水器（Water Purifier）
+        "owner:wine_rack",                  // 催陈器（Wine Rack）
+        "owner:livestock_feed_dispenser",   // 牲畜饲料分配器（Livestock Feed Dispenser）
+        "owner:blender",                    // 搅拌机（Blender）
+        "owner:chem_finisher",              // 化学成品机（Chem Finisher）
+        "owner:heating_plate",              // 加热板（Heating Plate）
+        "owner:hydroponic",                 // 水培系统（Hydroponic System）
+        "owner:3d_printer",                 // 3D打印机（3D Printer；目录别名条目 printer 同物）
+    };
+
+    // 生效名单（由 LoadBuiltinBlacklist() 在启动时填充；未加载前 = 代码默认值）。
+    private static string[] MachineContainerTokens = DefaultMachineContainerTokens;
+    private static string _machineSource = "代码默认";
+
+    // ★ 机器容器识别（供 MergePolicy.Evaluate / Patch_MaxNumAdd.Postfix 调用）。
+    //   复用 IsContainerInList 的三路 token 匹配；判据异常时 fail-safe 返回 false，
+    //   但先置 FaultProtection 故障位——MergePolicy 据此走 Deny 保守路径（宁可拦不可丢），
+    //   与 IsContainer 等数据保护判据的三态语义一致。
+    internal static bool IsMachineContainer(GameInventory inv)
+    {
+        if (inv == null) return false;
+        var tokens = MachineContainerTokens;
+        if (tokens == null || tokens.Length == 0)
+            return false;   // 显式清空（JSON []）= 玩家选择关闭机器拦截
+        try
+        {
+            // ★ 直接传 string[]（复用 IsContainerInList 的数组重载）——
+            //   原写法 string.Join(",", tokens) 每次调用都多分配一个拼接串、再被 Split 拆回，
+            //   而本方法是热路径（每格 MaxNumAdd + 每次合并决策都调），故省掉这一进一出。
+            //   token 三路匹配（裸 id / slot: / owner:）与白/黑名单共用同一实现，语义不变。
+            return IsContainerInList(inv, tokens);
+        }
+        catch
+        {
+            MarkJudgeFault(FaultProtection);
+            return false;
+        }
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // 生效名单（由 LoadBuiltinBlacklist() 在启动时填充；未加载前 = 代码默认值）
@@ -141,7 +206,8 @@ public partial class Main
                 // 无外置文件 = 正常情况（绝大多数玩家），静默用代码默认值。
                 Log?.Msg($"[名单] 无外部 {BlacklistJsonName}，使用代码默认内置名单（" +
                          $"id {BuiltinBlockItemIds.Length} / 前缀 {BuiltinBlockIdPrefixes.Length} / " +
-                         $"子串 {BuiltinBlockIdContains.Length} / 后缀 {BuiltinBlockIdSuffixes.Length}）。");
+                         $"子串 {BuiltinBlockIdContains.Length} / 后缀 {BuiltinBlockIdSuffixes.Length} / " +
+                         $"机器 {MachineContainerTokens.Length}）。");
                 return;
             }
 
@@ -168,6 +234,7 @@ public partial class Main
             anyOverride |= TryOverride(doc, "blockIdContains",  ref BuiltinBlockIdContains,  ref _blSourceContains);
             anyOverride |= TryOverride(doc, "blockIdSuffixes",  ref BuiltinBlockIdSuffixes,  ref _blSourceSuffixes);
             anyOverride |= TryOverride(doc, "blockSuffixExempt",ref BuiltinBlockSuffixExempt,ref _blSourceExempt);
+            anyOverride |= TryOverride(doc, "machineContainers", ref MachineContainerTokens,   ref _machineSource);
 
             if (anyOverride)
             {
@@ -176,7 +243,8 @@ public partial class Main
                          $"前缀={BuiltinBlockIdPrefixes.Length}[{_blSourcePrefixes}] / " +
                          $"子串={BuiltinBlockIdContains.Length}[{_blSourceContains}] / " +
                          $"后缀={BuiltinBlockIdSuffixes.Length}[{_blSourceSuffixes}] / " +
-                         $"豁免={BuiltinBlockSuffixExempt.Length}[{_blSourceExempt}]。");
+                         $"豁免={BuiltinBlockSuffixExempt.Length}[{_blSourceExempt}] / " +
+                         $"机器={MachineContainerTokens.Length}[{_machineSource}]。");
             }
             else
             {

@@ -30,7 +30,6 @@ public partial class Main
     private static bool LegacyMayStack(GameItem __instance, GameItem otherItem, ref bool __result)
     {
         // ══════════ 以下为 0.9.9 旧内联判据（回滚用，保留未删）══════════
-        // ══════════ 以下为 0.9.9 旧内联判据（回滚用，保留未删）══════════
         // ★ 旧路径的 Alt 导流检查（新路径已由 ShouldSteerToEmptySlot 承担；
         //   回滚到 false 时仍需它，否则丧失 Alt 快移导流）。
         if (AltTransferScope)

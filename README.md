@@ -753,6 +753,20 @@ Copy-Item 'D:\games\open code work\Item stacking\ItemStacking\bin\Release\ItemSt
 ## 当前状态
 
 - ✅ 骨架 + 堆叠资料库（已建）
+- ✅ **0.14.0（2026-10-13）：赃物热度零值闸门** —— `STOLEN_VALUE_INT` 缺省或 ==0 才可堆
+  - 实现：`Constants.ValueGateZeroTags` + `AtDefaultState` 内零值检查（早于 Count==0 早退，防模板空表绕过）
+  - 按字面规则：`STOLEN_TAG` 标记还在但热度=0 仍放行；非 0 热度一律 Deny（填补「热度相同非 0 也能合并」缺口）
+  - 搭乘 `ValueGate` cfg（默认 true），无独立开关；Legacy 回滚路径不含本判据（与 ValueGate 现状一致）
+  - 诊断日志节流：`IsContainer` 只打 True 命中行；MayStack/GetStackSlot/Ctrl 拦截日志改按「物品对+原因」LogOnce max 3（原生双调用不再成对刷屏）
+- ✅ **0.13.0（2026-10-13）：机器容器拦截（自动拆堆）** —— 详见 `堆叠mod机器拦截方案v3.yaml`
+  - 熔炉/解序器/水瓶打印机等 13 个机器容器：**禁止合并**（MergePolicy.Deny）+ **每格只放 1 件**（MaxNumAdd 钳 1）
+  - 玩家拖 N 件进机器 → 逐格铺开、余量留源、机器内绝不成堆（机器假设「一槽一实例」）
+  - 名单可经 `Mods/item_blacklist.json` 的 `machineContainers` 覆盖；启动日志 `[名单] … 机器=13`
+  - 同版配套修复 9 项（值域校验 fail-open、容量层 fail-open、自检补齐、配置描述失真等）+ 1 项热路径优化
+    —— 逐条见 v3 方案 §十
+- ✅ **0.12.x**：Ctrl 快移合并闸门、白名单空值迁移、Alt/Shift 配对快移（§四）、修饰键总闸
+- ✅ **0.11.x**：Alt 双向快移（柜台 ↔ 主仓库）、槽位 token 改用游戏原生 id、内置 id 黑名单恢复启用
+- ✅ **1.0.0 / 1.2.0**：状态一致性闸门（不可豁免）+ tag 值域校验（防拆分污染）
 - ✅ **0.9.0 已实机验收通过**（`Main.cs`）：整堆计价（`StackValueTotal`）+ 柜台禁堆默认关
   - 交易系统 30+ 个计价口径统一按整堆价值结账，卖出 ×N 不再只收 1 件的钱
   - 扣减语义实测正确（无「付部分钱扣整堆」的数据损失）
@@ -764,4 +778,6 @@ Copy-Item 'D:\games\open code work\Item stacking\ItemStacking\bin\Release\ItemSt
   - **P0 容器防护** + **P1 补丁自检** + **P2 上限下限钳制** + **P3 堆叠黑名单**
   - **未拥有拦截** + **电量拦截** + **动物拦截** + **鼠拦截** + **诊断日志 `DiagLog`**
     （`dotnet build` 0 警告 0 错误）
-- ⏳ 长期未验证项：native 是否真用 `maxSlotAmountItemFunc` 算上限（见「已知风险」）
+- ⏳ 长期未验证项：native 是否真用 `maxSlotAmountItemFunc` 算上限（见「已知风险」）；
+  机器容器的**运行期**行为（拖拽自动填充 / 每格 1 件）需实机回归（见 v3 §七）
+- 🧪 单测：xUnit 27 例全绿（`_tests/ItemStacking.Tests`）

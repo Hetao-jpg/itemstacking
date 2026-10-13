@@ -44,9 +44,16 @@ public partial class Main
         {
             try
             {
-                if (!StackEnabled) { Diag("MayStack 跳过（mod 关闭）"); return true; }
+                if (!StackEnabled)
+                {
+                    LogOnce("ms.skip.off", Level.Diag, "MayStack 跳过（mod 关闭）", max: 1);
+                    return true;
+                }
                 if (otherItem == null || __instance == otherItem)
-                { Diag($"MayStack 跳过（null 或同一物品）"); return true; }
+                {
+                    LogOnce("ms.skip.self", Level.Diag, "MayStack 跳过（null 或同一物品）", max: 3);
+                    return true;
+                }
 
                 // ══════════════════════════════════════════════════════════════
                 //  ★ 0.10.0（阶段1）合并决策单一源 + （阶段3）决策/导流解耦。
@@ -76,8 +83,13 @@ public partial class Main
                     var verdict = Evaluate(ctxNew, out var reasonNew);
                     if (verdict == MergeVerdict.Deny)
                     {
-                        // ★ 拦截必须始终输出（限流只针对"放行/成功"类）——实测要抓的正是拦截原因。
-                        Diag($"MayStack 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {otherItem.identifier}");
+                        // ★ 0.14.0（用户定稿）：拦截日志按【物品对 + 原因】限流（max 3）——
+                        //   原生每次悬停会调 2 次 MayStack，裸 Diag 导致同一行成对刷屏；
+                        //   max 3 覆盖双调用且保留可观察性，换原因/换物品对重新计数。
+                        LogOnce("deny.ms." + SafeId(__instance) + "/" + SafeId(otherItem) + "|" + reasonNew,
+                            Level.Diag,
+                            $"MayStack 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {otherItem.identifier}",
+                            max: 3);
                         __result = false;
                         return false;
                     }
@@ -138,8 +150,11 @@ public partial class Main
                     var verdict = Evaluate(ctxNew, out var reasonNew);
                     if (verdict == MergeVerdict.Deny)
                     {
-                        // ★ 拦截始终输出。
-                        Diag($"GetStackSlot 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {itemToBeStacked.identifier}");
+                        // ★ 0.14.0：与 MayStack 同策略 —— 按【物品对 + 原因】限流（max 3）。
+                        LogOnce("deny.gss." + SafeId(__instance) + "/" + SafeId(itemToBeStacked) + "|" + reasonNew,
+                            Level.Diag,
+                            $"GetStackSlot 拦截（MergePolicy·{reasonNew}）：{__instance.identifier} / {itemToBeStacked.identifier}",
+                            max: 3);
                         __result = null;
                         return false;
                     }
@@ -231,41 +246,214 @@ public partial class Main
     //
     //   ★ 与 0.9.9 柜台修复同源：柜台禁堆也是从「TryAcceptOnce 返 0」改为
     //     「MayStack 返 false 导流」。本次把该教训推广到全部判据。
+    //
+    // ── H3 合并（2026-10-12）──
+    //   原先本观测补丁与 StackPatches.AltTransfer.cs 的 `Patch_CtrlMergeGateOnSlotMarker`
+    //   各自挂在同一方法上（同方法双 Prefix）。Harmony 按注册顺序执行 Prefix，
+    //   任一 return false 则跳过原方法 ⇒ 谁先跑是隐式依赖，改一个可能影响另一个。
+    //   现合并为下方单一类，执行顺序显式化：
+    //     阶段1 = Ctrl 快移合并闸门（仅 CtrlTransferScope 内；违禁合并返 0 硬拒）
+    //     阶段2 = 观测直通（仅 DiagLog=true；永不改 __result）
+    //     最后   = return true 直通原生
+    //   ★ 与 Ctrl 闸门相关的完整设计（为何返 0 不置 null 等）见
+    //     StackPatches.AltTransfer.cs 的 Patch_CtrlHandlerRelease 段注释。
     // ═══════════════════════════════════════════════════════════════════════
 
-    [HarmonyPatch(typeof(SlotMarker), nameof(SlotMarker.TryAcceptOnce))]
-    private static class Patch_SlotTryAcceptOnce
+    // ★ 2026-10-13：自搬运重入深度。>0 时本补丁的 Prefix 立即直通原生 ——
+    //   否则 TryFillEmptySlots 里自调用 SlotMarker.TryAcceptOnce 会无限递归。
+    //   （放在 Main 层而非嵌套类内：嵌套类私有成员对 Main 不可见。）
+    [ThreadStatic] private static int _selfAcceptDepth;
+
+    // TryAcceptOnce(int) 的唯一补丁（H3：Ctrl 闸门 + 观测直通，顺序显式）。
+    [HarmonyPatch(typeof(SlotMarker), nameof(SlotMarker.TryAcceptOnce), new[] { typeof(int) })]
+    private static class Patch_SlotMarkerTryAcceptOnce
     {
         private static bool Prefix(SlotMarker __instance, ref int __result)
         {
             try
             {
-                // ★ 0.10.1：无论判定结果如何，一律直通原生（不改 __result / 不 return false），
-                //   以免触发上游 TryAcceptAll 的 break（问题2 根因）。
-                if (!DiagOn) return true;
+                if (_selfAcceptDepth > 0) return true;   // 自搬运 → 直通原生，防递归
 
-                if (!StackEnabled) return true;
-                var target = __instance.targetItem;
-                if (target == null) return true;      // 空槽 = 移动，非合并
-                var source = __instance.item;
-                if (source == null) return true;
+                // ── 阶段1：Ctrl 快移合并闸门（仅作用域内生效）──
+                if (CtrlTransferScope && StackEnabled)
+                {
+                    var target = __instance.targetItem;
+                    if (target != null)
+                    {
+                        var source = __instance.item;
+                        if (source != null)
+                        {
+                            var reason = GetMergeGateReason(__instance, target, source);
+                            if (reason != null)
+                            {
+                                // ★★ 2026-10-13 修复（用户实机 00:37 反馈）：机器容器【改投空槽】，
+                                //   而不是整条硬拒。现象：机器里已有同种物品时，原生把落点选成
+                                //   "那个已有堆"（合并候选）⇒ 我们按「机器容器内不允许堆叠」硬拒；
+                                //   而 TryAcceptOnce 是【单次调用】（不像拖放有 40 次循环兜底），
+                                //   硬拒 ⇒ 整条快移失败 ⇒ 连 ×1 都进不去（用户："彻底不能快移进机器"）。
+                                //   正解 = 复刻原生 `GraphUtils.InsertToActiveContainer`(0x766020) 的语义：
+                                //   它本身就是【按 unitCount 逐件循环、每件重新找一次槽】，而"找槽"
+                                //   (`TryFindOneValidInventorySlot` → MayStack) 会因机器 Deny 跳过合并候选
+                                //   ⇒ 只拿到空槽 ⇒ 天然「每格 1 件 + 逐格铺开」。见 TryFillEmptySlots。
+                                if (IsMachineContainer(__instance.inventory))
+                                {
+                                    int moved = TryFillEmptySlots(__instance, source);
+                                    if (moved > 0)
+                                    {
+                                        __result = moved;
+                                        // ★ 0.14.0：成功类按【物品 + 容器】限流（max 3），防连续快移刷屏。
+                                        LogOnce("ctrl.fill." + SafeId(source) + "@" + Ptr(__instance.inventory).ToString("X"),
+                                            Level.Diag,
+                                            $"[Ctrl 快移·机器改投空槽] {SafeId(source)} 放入空槽 ×{moved}" +
+                                            $"（每格 1 件，容器 {SafeId(__instance.inventory)}）", max: 3);
+                                        return false;
+                                    }
+                                }
 
-                var reason = GetMergeGateReason(__instance, target, source);
-                if (reason == null) return true;
+                                // ★ 违禁合并 → 返 0 硬拒（fail-safe：物品留在源容器，不丢、不覆盖）。
+                                //   为什么不置 targetItem=null 导流：见 AltTransfer.cs 作用域段注释。
+                                __result = 0;
+                                // ★ 0.14.0：按【物品对 + 原因】限流（max 3），防连续快移同因刷屏。
+                                LogOnce("deny.ctrl." + SafeId(source) + "/" + SafeId(target) + "|" + reason,
+                                    Level.Diag,
+                                    $"[Ctrl 快移·拦截] 合并候选被判定为「{reason}」→ 拒绝本次合并（物品留在源处）：" +
+                                    $"源 {SafeId(source)} ×{source.unitCount} → 目标堆 {SafeId(target)} ×{target.unitCount}" +
+                                    $"（容器 {SafeId(__instance.inventory)}）", max: 3);
+                                return false;   // 硬拒：GraphUtils.TryAcceptOnce 单次调用返 0 ⇒ 物品留源
+                            }
+                        }
+                    }
+                    // 走到这里 = Ctrl 作用域内但允许合并 → 继续阶段2（不 return）
+                }
 
-                // 仅供排查：本次「若在 MayStack 层就会导流/拦截」的合并，在这里只记录不干预。
-                LogOnce("observe." + SafeId(source) + "/" + SafeId(target), Level.Diag,
-                    $"[直通观测] 合并候选被判定为「{reason}」——本层不拦截（由 MayStack 导流）：" +
-                    $"源 {SafeId(source)} ×{source.unitCount} → 目标堆 {SafeId(target)} ×{target.unitCount}" +
-                    $"（容器 {SafeId(__instance.inventory)}）", max: 3);
-                return true;
+                // ── 阶段2：观测直通（仅 DiagLog=true；任何情况下不改 __result / 不 return false）──
+                //   ★ 0.10.1：一律直通原生，以免触发上游 TryAcceptAll 的 break（问题2 根因）。
+                if (DiagOn && StackEnabled)
+                {
+                    var target = __instance.targetItem;
+                    var source = __instance.item;
+                    if (source != null)
+                    {
+                        if (target != null)
+                        {
+                            var reason = GetMergeGateReason(__instance, target, source);
+                            if (reason != null)
+                            {
+                                // 仅供排查：本次「若在 MayStack 层就会导流/拦截」的合并，在这里只记录不干预。
+                                LogOnce("observe." + SafeId(source) + "/" + SafeId(target), Level.Diag,
+                                    $"[直通观测] 合并候选被判定为「{reason}」——本层不拦截（由 MayStack 导流）：" +
+                                    $"源 {SafeId(source)} ×{source.unitCount} → 目标堆 {SafeId(target)} ×{target.unitCount}" +
+                                    $"（容器 {SafeId(__instance.inventory)}）", max: 3);
+                            }
+                        }
+                        else if (source.unitCount > 1)
+                        {
+                            // ★★ 2026-10-13 新增：空槽【放置】观测（DiagLog 门控，只读、不改行为）。
+                            //   动因（用户实机反馈）：「Ctrl+点击快移」与「Ctrl+拖动整堆」都能把整堆
+                            //   塞进熔炉的一个格子里，绕过机器容器判据。本行用于一次性定死链路：
+                            //     · 复现时【能看到】本行 ⇒ 该路径确实经 `SlotMarker.TryAcceptOnce`
+                            //       ⇒ 在此层钳量即可覆盖（含 Ctrl 路径）；
+                            //     · 复现时【看不到】本行 ⇒ 该路径绕过本方法（很可能走
+                            //       GraphUtils.InsertToActiveContainer / TryAcceptAll 直落 L1）
+                            //       ⇒ 需改钳 GraphUtils 链。
+                            //   同时打印「本容器是否被机器判据识别」+ 容器归属描述 —— 一并定位
+                            //   owner: token 到底能不能匹配机器容器（v3 §六 R6 的关键未知量）。
+                            var inv = __instance.inventory;
+                            LogOnce("observe.place." + SafeId(source) + "@" + Ptr(inv).ToString("X"), Level.Diag,
+                                $"[落点观测·放置] 整堆入【空槽】候选：{SafeId(source)} ×{source.unitCount}" +
+                                $"，容器={DescribeContainer(inv)}" +
+                                $"，机器判据={IsMachineContainer(inv)}" +
+                                $"，marker.numTransfer={__instance.numTransfer}", max: 5);
+                        }
+                    }
+                }
+
+                return true;   // 直通原生（不改 __result）
             }
             catch (Exception e)
             {
                 if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                LogOnce("slotaccept", Level.Warn, $"直通观测异常，本次放行: {e.Message}");
+                LogOnce("slotaccept", Level.Warn, $"TryAcceptOnce 补丁异常，本次放行: {e.Message}");
                 return true;
             }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  ★ 2026-10-13：机器容器【改投空槽】—— 复刻原生 `InsertToActiveContainer` 的逐件循环
+    //
+    //  ── 反汇编依据（GameAssembly，已离线取证）──
+    //   `GraphUtils::InsertToActiveContainer(PixelWindow, GameItem)` @ RVA 0x766020：
+    //        mov  esi, dword ptr [rbp + 0x1F8]   ; esi = item.unitCount
+    //        test esi, esi / jle …               ; <=0 直接退
+    //        xor  ebx, ebx                       ; i = 0
+    //    循环 cmp  ebx, esi / jge …              ; while (i < unitCount)
+    //        mov  ecx, 4                         ; ★ 接口 slot 4
+    //        call 0x180003FA0                    ; = GraphNodeStorage 接口 slot 4
+    //                                            ;   = TryFindOneValidInventorySlot
+    //        test rax, rax / je …                ; 找不到槽 → 退出
+    //  ⇒ 原生"塞进活动容器"本身就是【按 unitCount 逐件循环、每件重新找一个槽】。
+    //    而"找槽" `TryFindOneValidInventorySlot` 会调 `MayStack`
+    //    （GameGridScrollableInventory 0x77BB4E），所以【我们的机器 Deny 在这一层天然生效】
+    //    ⇒ 合并候选被跳过 ⇒ 只会拿到空槽 ⇒ 正好是「每格 1 件 + 逐格铺开」。
+    //
+    //  ── 为什么必须自己写这个循环（而不是像拖放那样靠原生兜底）──
+    //    拖放路径有 EndDrag 的 40 次循环兜底（占位后继续找下一个槽）；
+    //    而 Ctrl/Alt 快移走的是 `GraphUtils.TryAcceptOnce`【单次调用】——
+    //    一旦落点被选定为"已有堆"，就没有第二次搜索机会了（这正是用户"彻底不能快移进机器"的成因）。
+    //
+    //  ── 安全边界 ──
+    //    · 只在【机器容器】分支被调用（其它拦截原因仍走硬拒）。
+    //    · 只投 `targetItem == null` 的空槽（双保险，即使 finder 给了合并候选也不接）。
+    //    · 每次只接受 1 件（`amount=1`，而 TryAcceptOnce 内部还会再取 min(…, numTransfer, MaxNumRemove)）。
+    //    · 上限 64 次兜底，防异常值把循环拉长；任何异常 → 返回已成功件数（0 则调用方按原逻辑硬拒）。
+    //    · 重入：本方法内自调用 TryAcceptOnce，靠 `_selfDepth` 让本补丁 Prefix 直通原生。
+    // ═══════════════════════════════════════════════════════════════════════
+    private static int TryFillEmptySlots(SlotMarker origin, GameItem source)
+    {
+        try
+        {
+            if (origin == null || source == null) return 0;
+            var grid = origin.inventory as GameGridInventory;
+            if (grid == null) return 0;
+
+            int moved = 0;
+            int want = Math.Min(source.unitCount, 64);
+            // ★ 已试过的槽位指针：finder 可能反复返回同一个"已占用"的槽，
+            //   若见 targetItem!=null 就 break，会导致一次快移只填 1 格（可用性差）；
+            //   若无条件 continue 又有死循环风险。⇒ 指针去重：见过即终止，未见则跳过继续找。
+            var tried = new HashSet<long>();
+            _selfAcceptDepth++;
+            try
+            {
+                for (int i = 0; i < want; i++)
+                {
+                    SlotMarker m;
+                    try { m = grid.TryFindOneValidInventorySlot(source); } catch { break; }
+                    if (m == null) break;
+
+                    long p = Ptr(m);
+                    if (!tried.Add(p)) break;          // 同一槽又回来了 ⇒ 没有新空槽可投
+
+                    if (m.targetItem != null) continue; // 只投空槽：这个已占用，试下一个
+                    if (m.numTransfer < 1) continue;
+                    m.item = source;                   // 原生 GetStackSlot 同款：finder 未必回填 item
+                    int n;
+                    try { n = m.TryAcceptOnce(1); } catch { break; }
+                    if (n > 0) moved += n;
+                }
+            }
+            finally
+            {
+                _selfAcceptDepth--;
+            }
+            return moved;
+        }
+        catch (Exception e)
+        {
+            if (e is OutOfMemoryException || e is StackOverflowException) throw;
+            LogOnce("fill-slots", Level.Warn, $"[Ctrl 快移] 机器改投空槽异常，本次退回硬拒: {e.Message}");
+            return 0;
         }
     }
 }

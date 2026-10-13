@@ -99,11 +99,13 @@ internal static unsafe class ModLogTestHost
         lock (_errCb) _errCb.Clear();
 
         // T3.1 后三个容器合并成 _logOnce（key 带 "W:"/"D:" 前缀）+ _diagKeys 计数。
+        // H1 后 Warn 另有独立计数 _warnKeys（各 500 / 200 上限互不挤占）。
         // 按实际类型调 Clear，不硬转接口，免得以后有人换集合时测试炸出 InvalidCastException。
         var main = typeof(Main);
         object bag = main.GetField("_logOnce", F).GetValue(null);
         bag.GetType().GetMethod("Clear", Type.EmptyTypes).Invoke(bag, null);
         main.GetField("_diagKeys", F).SetValue(null, 0);
+        main.GetField("_warnKeys", F).SetValue(null, 0);
 
         // DiagOn => _diagLog != null && _diagLog.Value
         object entry = Activator.CreateInstance(main.GetField("_diagLog", F).FieldType);
@@ -114,6 +116,10 @@ internal static unsafe class ModLogTestHost
     /// <summary>MaxDiagOnce 是 private const，从元数据读，避免测试里写死 200。</summary>
     public static int MaxDiagOnce
         => (int)typeof(Main).GetField("MaxDiagOnce", F).GetRawConstantValue();
+
+    /// <summary>MaxWarnOnce（H1：Warn 独立 key 上限）同样是 private const，从元数据读。</summary>
+    public static int MaxWarnOnce
+        => (int)typeof(Main).GetField("MaxWarnOnce", F).GetRawConstantValue();
 
     /// <summary>已登记的 key 数 —— 断言「超出上限后不新增 key」用（光看日志数看不出来）。
     /// T3.1 后 Warn / Diag 共用一个 _logOnce，各用例只用其中一种级别，故总数即该级别数。</summary>

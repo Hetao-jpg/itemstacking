@@ -117,6 +117,12 @@ public partial class Main
         {
             // 未开总闸 / 未开接管 → 不进作用域，完全交还原生。
             if (!AltTransferTakeover) return;
+            // ★ 2026-10-13：Alt 已改为【转发给原生 Ctrl 逻辑】（AltPairMode="ctrl"）⇒
+            //   不再需要 Alt 专属作用域。若这里仍置位，会同时带来两件反向的事：
+            //     ① `ShouldSteerToEmptySlot` 的 Alt 分支恒导流（连正常容器也不许合并）；
+            //     ② `Patch_TryFindOneValidSlot` 的 Alt 分支会改写被转发那次调用的落点/数量。
+            //   两者都会让"和 Ctrl 一样的逻辑"变形，故直接不进作用域。
+            if (AltRelayToCtrl) return;
             if (!isQuickTransfer) return;
             if (currentItem == null) return;
 
@@ -326,8 +332,15 @@ public partial class Main
             //   ★ 抬到 unitCount 而非直接 StackCap，避免"旧档大堆"借道绕过新上限。
             if (!AltTransferScope)
             {
+                // ★ 2026-10-13：机器容器排除 —— 本段是「GameGridInventory 硬编码 1 件 → 抬到
+                //   min(StackCap, unitCount)」的修复。机器容器（0.13.0 起）要求「每格 1 件」，
+                //   若此处把它抬到 StackCap，会让一次拖拽把多件塞进机器的一格，破坏该不变量
+                //   （且绕过了 Patch_MaxNumAdd 的机器钳制 —— 这里直接改写 numTransfer）。
+                //   机器容器正常情况下是 GameSlotInventory（本补丁只挂 GameGridInventory 实现），
+                //   故此判据在默认情况下不触发，属【防御性加固】。
                 if (__result != null && __result.targetItem == null && __result.numTransfer == 1
-                    && item != null && item.unitCount > 1)
+                    && item != null && item.unitCount > 1
+                    && !IsMachineContainer(__result.inventory))
                 {
                     int raised = Math.Min(StackCap, item.unitCount);
                     if (raised > 1)
@@ -346,20 +359,15 @@ public partial class Main
             // ★ 0.7.0 曾改为逐次无条件输出，0.9.0 收回 DiagLog 总闸之下 ——
             //   排查 Alt 落点时开 DiagLog 即可看到每一次的完整快照。
             //   ★ 0.12.2 限流：同一物品最多打 3 次，避免快速 Alt 快移刷屏。
-            if (DiagOn)
-            {
-                try
-                {
-                    LogOnce("altlot." + SafeId(item), Level.Diag,
-                        $"[Alt 落点] 命中：item={SafeId(item)} ×{item.unitCount}，" +
-                        $"原生结果={( __result == null ? "null" : "有")}" +
-                        (__result == null
-                            ? ""
-                            : $"，targetItem={SafeId(__result.targetItem)}，容器={SafeId(__result.inventory)}" +
-                              $"，numTransfer={__result.numTransfer}"), max: 3);
-                }
-                catch { }
-            }
+            //   ★ L4（2026-10-12）：原「if (DiagOn) { try { Log?.Msg / LogOnce } catch {} }」
+            //     形式统一收口为直接 LogOnce —— DiagOn 门控与异常安全 LogOnce 内部已具备。
+            LogOnce("altlot." + SafeId(item), Level.Diag,
+                $"[Alt 落点] 命中：item={SafeId(item)} ×{item.unitCount}，" +
+                $"原生结果={( __result == null ? "null" : "有")}" +
+                (__result == null
+                    ? ""
+                    : $"，targetItem={SafeId(__result.targetItem)}，容器={SafeId(__result.inventory)}" +
+                      $"，numTransfer={__result.numTransfer}"), max: 3);
 
             // ★★ 0.7.0 修订（2026-10-08 17:47 实机 + 反汇编双证）：
             //   **不再自己用 TryInventorySlot 找空格**（上一版的做法），
@@ -388,15 +396,9 @@ public partial class Main
             //    → 改投 null，让原生 continue 去试下一个容器（避免真的合并）。
             if (__result != null && __result.targetItem != null)
             {
-                if (DiagOn)
-                {
-                    try
-                    {
-                        Log?.Msg($"[Alt 落点] 原生仍给合并落点 targetItem={SafeId(__result.targetItem)}" +
-                                 $"（预期已被 MayStack 挡住）→ 拒绝合并、改投 null");
-                    }
-                    catch { }
-                }
+                LogOnce("altlot.merge." + SafeId(__result.targetItem), Level.Diag,
+                    $"[Alt 落点] 原生仍给合并落点 targetItem={SafeId(__result.targetItem)}" +
+                    $"（预期已被 MayStack 挡住）→ 拒绝合并、改投 null", max: 3);
                 __result = null;
                 return;
             }
@@ -406,14 +408,8 @@ public partial class Main
             // ② 有效性兜底：空槽落点必须 `numTransfer > 0`（= 游戏自己的"能放下"判据）。
             if (__result.numTransfer <= 0)
             {
-                if (DiagOn)
-                {
-                    try
-                    {
-                        Log?.Msg($"[Alt 落点] 空槽落点 numTransfer={__result.numTransfer} <= 0（放不下）→ 改投 null");
-                    }
-                    catch { }
-                }
+                LogOnce("altlot.full", Level.Diag,
+                    $"[Alt 落点] 空槽落点 numTransfer={__result.numTransfer} <= 0（放不下）→ 改投 null", max: 3);
                 __result = null;
                 return;
             }
@@ -424,14 +420,8 @@ public partial class Main
             {
                 int before = __result.numTransfer;
                 __result.numTransfer = amount;
-                if (DiagOn)
-                {
-                    try
-                    {
-                        Log?.Msg($"[Alt 落点] 数量钳制：numTransfer {before} → {amount}（容器 {SafeId(__result.inventory)}，targetItem={SafeId(__result.targetItem)}）");
-                    }
-                    catch { }
-                }
+                LogOnce("altlot.clamp." + SafeId(__result.inventory), Level.Diag,
+                    $"[Alt 落点] 数量钳制：numTransfer {before} → {amount}（容器 {SafeId(__result.inventory)}，targetItem={SafeId(__result.targetItem)}）", max: 3);
             }
         }
         catch (Exception e)
@@ -498,7 +488,7 @@ public partial class Main
         {
             try
             {
-                if (!_ctrlTransferMergeGate.Value) return;
+                if (_ctrlTransferMergeGate == null || !_ctrlTransferMergeGate.Value) return;
                 if (__instance == null) return;
                 // Ctrl 快移的触发条件与原生一致：currentItem 非空 且 isQuickTransfer 为真。
                 if (__instance.currentItem == null) return;
@@ -524,13 +514,15 @@ public partial class Main
         }
     }
 
-    // Ctrl 快移作用域内的【合并闸门·唯一落点】。
-    //   挂 `SlotMarker.TryAcceptOnce(int)`(0x7b0020) —— 它是合并/放置的**共同瓶颈**，
-    //   且**只有在这里**才能读到引擎现造的 `targetItem`（合并分支的判据）。
-    //   ★ 与既有的 `Patch_SlotTryAcceptOnce`（纯观测直通，0.10.1）**不同**：
-    //     那个补丁任何时候都不干预；本补丁**只在 Ctrl 快移作用域内**拦截违禁合并。
+    // Ctrl 快移作用域内的【合并闸门·落点已迁至 H3 合并补丁】。
+    //   ★ H3（2026-10-12）：原 `Patch_CtrlMergeGateOnSlotMarker` 与 StackPatches.Merge.cs
+    //     的观测补丁同挂 `SlotMarker.TryAcceptOnce(int)`（同方法双 Prefix，执行顺序隐式依赖
+    //     Harmony 注册序）。现合并为 Merge.cs 里的 `Patch_SlotMarkerTryAcceptOnce`：
+    //     阶段1 = 本闸门（仅 CtrlTransferScope 内拦截违禁合并，返 0 硬拒）
+    //     阶段2 = 观测直通（仅 DiagLog=true）
+    //     最后   = 直通原生。本文件只保留作用域标志与进入/退出补丁（见上）。
     //
-    //   ★★ 为什么「返 0 硬拒」而不是「把 targetItem 置 null 导流」：
+    //   ★★ 闸门为什么「返 0 硬拒」而不是「把 targetItem 置 null 导流」（设计依据，保留）：
     //     · `SlotMarker.TryAcceptOnce` 拿到的 marker 由 `GraphUtils.TryAcceptOnce`
     //       内"找第一个有效槽"决定 —— 若它返回的是【已有同名堆】的槽位（targetItem!=null），
     //       说明原生已锁定了**那一格**。若我们把 targetItem 置 null，原生会把这件物品
@@ -540,41 +532,6 @@ public partial class Main
     //     · 真正要"放进空位"（导流到空槽）的正解是让原生重新找空格 —— 那走 MayStack 层：
     //       若 Ctrl 快移**经过** MayStack（与本 mod Alt 同源，实测三条快移 handler 一致），
     //       现有 `Patch_MayStack.Prefix` 已对任何 Deny 返回 false → 原生落空槽；
-    //       若**不经过** MayStack（完全绕过），本闸门返 0 兜底，杜绝违禁合并。
-    [HarmonyPatch(typeof(SlotMarker), nameof(SlotMarker.TryAcceptOnce), new[] { typeof(int) })]
-    private static class Patch_CtrlMergeGateOnSlotMarker
-    {
-        private static bool Prefix(SlotMarker __instance, ref int __result)
-        {
-            try
-            {
-                if (!CtrlTransferScope) return true;      // ★ 只服务 Ctrl 快移，其余直通
-                if (!StackEnabled) return true;
-
-                var target = __instance.targetItem;
-                if (target == null) return true;          // 空槽 = 放置 → 明确放行（用户定调）
-
-                var source = __instance.item;
-                if (source == null) return true;
-
-                // 复用单一源决策（含白名单/黑名单/状态闸门）。inventory 作权威容器。
-                var reason = GetMergeGateReason(__instance, target, source);
-                if (reason == null) return true;          // Allow → 直通原生合并
-
-                // ★ 违禁合并 → 返 0 硬拒（fail-safe：物品留在源容器，不丢、不覆盖）。
-                __result = 0;
-                Diag($"[Ctrl 快移·拦截] 合并候选被判定为「{reason}」→ 拒绝本次合并（物品留在源处）：" +
-                     $"源 {SafeId(source)} ×{source.unitCount} → 目标堆 {SafeId(target)} ×{target.unitCount}" +
-                     $"（容器 {SafeId(__instance.inventory)}）");
-                return false;
-            }
-            catch (Exception e)
-            {
-                if (e is OutOfMemoryException || e is StackOverflowException) throw;
-                LogOnce("ctrlgate", Level.Warn, $"Ctrl 快移合并闸门异常，本次放行合并: {e.Message}");
-                return true;
-            }
-        }
-    }
+    //       若**不经过** MayStack（完全绕过），合并补丁阶段1返 0 兜底，杜绝违禁合并。
 }
 

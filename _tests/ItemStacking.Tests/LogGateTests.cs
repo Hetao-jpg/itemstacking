@@ -261,6 +261,47 @@ public class LogGateTests
         Assert.DoesNotContain(ModLogTestHost.Raw, s => s.Contains("DIAG-AFTER-WARN"));
     }
 
+    // ─────────────────── H1：Warn 独立上限（MaxWarnOnce） ───────────────────
+
+    [Fact]
+    public void WarnOnce_AtWarnCap_NewKeyIsSilentlyDropped()
+    {
+        // H1（2026-10-12）防回归：Warn 曾完全无上限 ⇒ key 组合爆炸（state.diff 等）
+        // 会让 _logOnce 无限增长（长会话内存泄漏）。现在 Warn 有独立上限，满额后新 key 不登记不输出。
+        var cap = ModLogTestHost.MaxWarnOnce;
+        ModLogTestHost.Reset(diagOn: false);   // Warn 不看总闸：关闸也必须能打
+        for (var i = 0; i < cap; i++)
+            ModLogTestHost.WarnOnce("wfill-" + i, "WFILL");
+        Assert.Equal(cap, ModLogTestHost.RegisteredCount());
+
+        var before = ModLogTestHost.Raw.Count;
+        ModLogTestHost.WarnOnce("woverflow", "WARN-OVERFLOW-MARKER");
+
+        Dump();
+        Assert.Equal(before, ModLogTestHost.Raw.Count);
+        Assert.DoesNotContain(ModLogTestHost.Raw, s => s.Contains("WARN-OVERFLOW-MARKER"));
+        Assert.Equal(cap, ModLogTestHost.RegisteredCount());   // 超上限的新 key 不占位
+    }
+
+    [Fact]
+    public void WarnCapCountsOnlyWarnKeys_DiagKeysDoNotShrinkIt()
+    {
+        // 与 DiagCapCountsOnlyDiagKeys_WarnKeysDoNotShrinkIt 对称：Warn 打满自己的上限，
+        // Diag 的 200 个名额必须一个不少；两条线各自独立计数（_warnKeys / _diagKeys）。
+        var warnCap = ModLogTestHost.MaxWarnOnce;
+        var diagCap = ModLogTestHost.MaxDiagOnce;
+        ModLogTestHost.Reset(diagOn: true);
+        for (var i = 0; i < warnCap; i++)
+            ModLogTestHost.WarnOnce("wfill-" + i, "WFILL");
+
+        for (var i = 0; i < diagCap; i++)
+            ModLogTestHost.DiagOnce("dfill-" + i, "DFILL");
+
+        Dump();
+        Assert.Equal(diagCap, ModLogTestHost.Raw.Count(s => s.Contains("DFILL")));   // 200 条一条都不能少
+        Assert.Equal(warnCap + diagCap, ModLogTestHost.RegisteredCount());
+    }
+
     [Fact]
     public void WarnOnce_WithLogNull_FallsBackToGlobalLogger()
     {

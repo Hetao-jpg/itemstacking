@@ -52,14 +52,28 @@ public partial class Main : MelonMod
         //   必须在 LoadBuiltinBlacklist() 之后（复用其查找/解析结果语义）。
         LoadIgnoredStateTags();
         ValidatePatches();
+        // ── L2（2026-10-12 计划·可选阶段）：启动日志分级 ──
+        //   VerboseStartup=true（默认）= 逐项明细全打（输出与分级前逐字节一致）；
+        //   VerboseStartup=false       = 只打「核心加载行 + 关闭提示」。
+        //   ★ 两类 Warning 不受本项影响、始终输出：白名单为空（安全边界）、
+        //     AltPairMode 未知值（配置错误）—— 故障/配置错误不许静默。
+        bool verboseStartup = _verboseStartup == null || _verboseStartup.Value;
         LoggerInstance.Msg(
             $"Item Stacking 已加载：拖放堆叠 = {_enableStacking.Value}，堆叠上限 = {StackCap}，" +
             $"Ctrl+拖动整堆 = {_ctrlWholeStack.Value}，诊断日志 = {_diagLog.Value}。");
-        LoggerInstance.Msg(
-            $"  保护总闸 = {_stackBlacklist.Value}。" +
-            $"容器白名单 = {(_containerWhitelist.Value == "" ? "【空 = 全不生效】" : _containerWhitelist.Value)}；" +
-            $"容器黑名单 = {(_containerBlacklist.Value == "" ? "空" : _containerBlacklist.Value)}；" +
-            $"柜台禁堆 = {_blockCounterStack.Value}。");
+        if (!verboseStartup)
+        {
+            LoggerInstance.Msg(
+                "  （详细启动日志已关闭：把 cfg 的 VerboseStartup 改为 true 可恢复逐项明细。）");
+        }
+        if (verboseStartup)
+        {
+            LoggerInstance.Msg(
+                $"  保护总闸 = {_stackBlacklist.Value}。" +
+                $"容器白名单 = {(_containerWhitelist.Value == "" ? "【空 = 全不生效】" : _containerWhitelist.Value)}；" +
+                $"容器黑名单 = {(_containerBlacklist.Value == "" ? "空" : _containerBlacklist.Value)}；" +
+                $"柜台禁堆 = {_blockCounterStack.Value}。");
+        }
         // ★ 白名单 = 安全边界，空 = 全不生效（mod 等于未启用）。
         //   2026-10-12 起默认已含常用容器；走到这里说明用户手动清空过，醒目提示 + 给恢复串。
         if (string.IsNullOrWhiteSpace(_containerWhitelist.Value))
@@ -72,56 +86,69 @@ public partial class Main : MelonMod
                 "[安全边界] 默认串：" +
                 "ContainerWhitelist = \"" + DefaultContainerWhitelist + "\"");
             LoggerInstance.Warning(
-                "[安全边界] 机器容器（熔炉/解序器/其他 mod 自定义机器）请【不要】加入白名单 —— " +
-                "它们假设「一槽=一实例」，堆叠会导致物品丢失。");
+                "[安全边界] 机器容器（熔炉/解序器/水瓶打印机等）已由【机器容器名单】单独拦截：" +
+                "合并被拒 + 每格只放 1 件（cfg/JSON 的 machineContainers，见 BuiltinBlacklist）—— " +
+                "即使把它们写进白名单也不会在机器里堆叠。若你装了【本作之外的自定义机器】，" +
+                "请先用 [作用域探针] 确认其容器 id，再决定是否把 owner:xxx 加入 machineContainers。");
         }
-        LoggerInstance.Msg(
-            $"  物品黑名单·自定义 = {(_itemBlacklist.Value == "" ? "空" : _itemBlacklist.Value)}。");
-        // ★ 2026-10-12：内置 id 黑名单恢复启用（用户要求）；类判据维持停用。
-        LoggerInstance.Msg(
-            "  ★★ 类判据【已停用】（状态一致性闸门已覆盖）；" +
-            "内置 id 黑名单【已恢复启用】（node/module/keycard/文书等重新拦截）；" +
-            "自定义 ItemBlacklist 仍生效。若要停用：把 StackGates.cs 里 GetBlacklistReason " +
-            "的内置段 #if true 改回 #if false 重新编译。");
-        LoggerInstance.Msg(
-            $"  ★ 状态一致性闸门 = 恒定开启（见上行）+ 忽略名单 {IgnoredStateTags.Length} 项[{_ignoredTagsSource}]。");
-        // ★ 0.12.0（§四·2）：修饰键快移「1 总闸 + 3 小开关」的启动汇总。
-        LoggerInstance.Msg(
-            $"  ★ 修饰键快移：总开关 = {_modifierKeysEnabled.Value}；" +
-            $"Alt 快移 = {_altClickTransfer.Value}；Alt 配对 = {_altPairEnable.Value}；" +
-            $"Shift 配对 = {_shiftPairEnable.Value}；每次件数 = {AltQuickTransferAmount}。");
-        LoggerInstance.Msg(
-            $"  ★ Alt 配对快移（§四）= 模式「{_altPairMode.Value}」" +
-            (AltPairActive
-                ? $"（玩家柜台 ↔ 主仓库双向，合并 = {_altPairMerge.Value}）"
-                : "（未生效：交还原生『主仓库/后仓/柜台前格 → 展示柜』）"));
-        LoggerInstance.Msg(
-            $"  ★ Shift 配对快移（§四·2）= {(ShiftPairActive ? "开" : "关")}" +
-            (ShiftPairActive
-                ? $"（展示柜 ↔ 主仓库双向，与 Alt 共用合并开关 = {_altPairMerge.Value}）"
-                : "（交还原生：Shift+左键单向「导向展示柜」）"));
+        if (verboseStartup)
+        {
+            LoggerInstance.Msg(
+                $"  物品黑名单·自定义 = {(_itemBlacklist.Value == "" ? "空" : _itemBlacklist.Value)}。");
+            // ★ 2026-10-12：内置 id 黑名单恢复启用（用户要求）；类判据维持停用。
+            LoggerInstance.Msg(
+                "  ★★ 类判据【已停用】（状态一致性闸门已覆盖）；" +
+                "内置 id 黑名单【已恢复启用】（node/module/keycard/文书等重新拦截）；" +
+                "自定义 ItemBlacklist 仍生效。若要停用：把 StackGates.cs 里 GetBlacklistReason " +
+                "的内置段 #if true 改回 #if false 重新编译。");
+            LoggerInstance.Msg(
+                $"  ★ 状态一致性闸门 = 恒定开启（见上行）+ 忽略名单 {IgnoredStateTags.Length} 项[{_ignoredTagsSource}]。");
+            // ★ 0.12.0（§四·2）：修饰键快移「1 总闸 + 3 小开关」的启动汇总。
+            LoggerInstance.Msg(
+                $"  ★ 修饰键快移：总开关 = {_modifierKeysEnabled.Value}；" +
+                $"Alt 快移 = {_altClickTransfer.Value}；Alt 配对 = {_altPairEnable.Value}；" +
+                $"Shift 配对 = {_shiftPairEnable.Value}；每次件数 = {AltQuickTransferAmount}。");
+            LoggerInstance.Msg(
+                $"  ★ Alt 快移（§四）= 模式「{_altPairMode.Value}」" +
+                (AltRelayToCtrl
+                    ? $"（★ 与 Ctrl+点击同一条逻辑；数量上限 = {AltQuickTransferAmount}，余量归还源容器）"
+                    : AltPairActive
+                        ? $"（玩家柜台 ↔ 主仓库双向，合并 = {_altPairMerge.Value}）"
+                        : "（native：交还原生『主仓库/后仓/柜台前格 → 展示柜』）"));
+            LoggerInstance.Msg(
+                $"  ★ Shift 配对快移（§四·2）= {(ShiftPairActive ? "开" : "关")}" +
+                (ShiftPairActive
+                    ? $"（展示柜 ↔ 主仓库双向，与 Alt 共用合并开关 = {_altPairMerge.Value}）"
+                    : "（交还原生：Shift+左键单向「导向展示柜」）"));
+        }
         // ★ 未知值告警：AltPairMode 用区分大小写的精确匹配，填错会【静默】退回原生。
         //   启动时显式提示，避免「以为开了却没生效」的静默故障。
         if (_altPairMode != null
-            && _altPairMode.Value != "counter_inv"
-            && _altPairMode.Value != "native")
+            && _altPairMode.Value != Constants.AltPairModeCtrl
+            && _altPairMode.Value != Constants.AltPairModeCounterInv
+            && _altPairMode.Value != Constants.AltPairModeNative)
         {
             LoggerInstance.Warning(
-                $"  ★ AltPairMode 值「{_altPairMode.Value}」无法识别（仅接受 \"counter_inv\" / \"native\"，" +
+                $"  ★ AltPairMode 值「{_altPairMode.Value}」无法识别（仅接受 \"{Constants.AltPairModeCtrl}\" / " +
+                $"\"{Constants.AltPairModeCounterInv}\" / \"{Constants.AltPairModeNative}\"，" +
                 "区分大小写），已按退回原版处理。");
         }
-        LoggerInstance.Msg(
-            $"  ★ 合并判定 = {(UseMergePolicy ? "新版单一源 MergePolicy" : "旧版 0.9.9 内联判据（已失去状态一致性保护！）")}" +
-            "（cfg z9_UseMergePolicy；普通玩家请保持 true）");
-        LoggerInstance.Msg(
-            $"  ★ tag 值域校验闸门 = {(ValueGateEnabled ? "开" : "关（已失去防拆分污染保护）")}" +
-            "（cfg ValueGate；普通玩家请保持 true）");
-        LoggerInstance.Msg(
-            $"  ★ 整堆计价 = {_stackValueTotal.Value}" +
-            (_stackValueTotal.Value
-                ? "（GetNegociatedValue × unitCount ⇒ 卖出/买入/批发/估价/盗窃/犯罪价值 全部按整堆计；" +
-                  "首次开启请先用 ×2~×3 小堆在柜台实测确认扣减语义）"
-                : "（关闭：交易系统仍按单件计价，堆叠物品卖出只按 1 件结账）"));
+        if (verboseStartup)
+        {
+            LoggerInstance.Msg(
+                $"  ★ 合并判定 = {(UseMergePolicy ? "新版单一源 MergePolicy" : "旧版 0.9.9 内联判据（已失去状态一致性保护！）")}" +
+                "（cfg z9_UseMergePolicy；普通玩家请保持 true）");
+            LoggerInstance.Msg(
+                $"  ★ tag 值域校验闸门 = {(ValueGateEnabled ? "开" : "关（已失去防拆分污染保护）")}" +
+                (ValueGateEnabled ? "（含 0.14.0 非0热度赃物拦截）" : "") +
+                "（cfg ValueGate；普通玩家请保持 true）");
+            LoggerInstance.Msg(
+                $"  ★ 整堆计价 = {_stackValueTotal.Value}" +
+                (_stackValueTotal.Value
+                    ? "（GetNegociatedValue × unitCount ⇒ 卖出/买入/批发/估价/盗窃/犯罪价值 全部按整堆计；" +
+                      "首次开启请先用 ×2~×3 小堆在柜台实测确认扣减语义）"
+                    : "（关闭：交易系统仍按单件计价，堆叠物品卖出只按 1 件结账）"));
+        }
     }
 
     internal static void Diag(string message)
@@ -136,30 +163,40 @@ public partial class Main : MelonMod
     //  都会逐条输出；一次拖放会高频触发这些钩子（同名堆合并循环 + 数量重算），
     //  DiagLog=true 时瞬间刷出几十上百行，反而淹没真正要看的「拦截原因」。
     //
-    //  策略：给「成功/放行」类日志加【去重限流】（同一 key 只打一次），
-    //  「拦截/异常」类日志【始终输出】—— 实测要抓的正是拦截原因，不能被限掉。
+    //  策略：给「成功/放行」类日志加【去重限流】（同一 key 只打一次）；
+    //  「拦截/异常」类 —— ★ 0.14.0（用户定稿）起【同样限流】：按「物品对 + 原因」
+    //  LogOnce max 3（原生每次悬停调 2 次 MayStack，裸 Diag 会成对刷屏）。
+    //  3 次额度覆盖双调用且保留可观察性；换原因 / 换物品对重新计数。
     //  全局上限 MAX_DIAG_ONCE 兜底，防止 key 组合爆炸仍刷屏。
     //
     //  T3.1（2026-10-12）：原来的 WarnOnce / DiagOnce / DiagRate 三个方法 + 三个静态集合
     //  （_warnedOnce / _diagOnce / _diagCount）合并成一个 LogOnce + 一个字典。
     //  合并最要命的就是「门控搞混」，三种口径必须各自保住：
-    //    · Warn —— 不受 DiagOn 总闸管、无全局上限（防护降级必须无条件出现）；
+    //    · Warn —— 不受 DiagOn 总闸管（防护降级必须出现）、独立上限 MaxWarnOnce（见下 H1）；
     //    · Diag —— 受 DiagOn 总闸管、共用 MaxDiagOnce 上限；
     //    · 上限 —— 只拦【新增 key】，已登记的老 key 剩余次数照常打。
     //  key 用 "W:" / "D:" 前缀分开存，避免 Warn 与 Diag 撞 key 互相顶掉。
     //  这几条分支由 _tests/ItemStacking.Tests/LogGateTests.cs 逐条钉死，改这里先跑测试。
     // ══════════════════════════════════════════════════════════════════════
-    private const int MaxDiagOnce = 200;   // 限流日志的全局条数上限（超出后静默丢弃）
+    private const int MaxDiagOnce = 200;   // Diag 限流日志的条数上限（超出后静默丢弃）
+
+    // ★ H1（2026-10-12）：Warn 级别的独立 key 上限。
+    //   原先 Warn 完全不设上限（防「防护降级告警被限死」），但 key 组合可爆炸：
+    //   StateConsistency.DiagStateDiff 的 key = "state.diff." + idA + "/" + idB + "|" + detail
+    //   ⇒ 480 物品 × 480 物品 × N tag 会把 _logOnce 撑到无限增长（长会话内存缓慢泄漏）。
+    //   500 为经验值：正常会话 Warn 种类 < 30，留足余量；组合爆炸最多登记 500 条即停。
+    private const int MaxWarnOnce = 500;
 
     // 「key → 已输出次数」，Warn / Diag 都进这一个字典，靠前缀区分（见上）。
     private static readonly Dictionary<string, int> _logOnce = new Dictionary<string, int>(StringComparer.Ordinal);
-    // ★ 只数 Diag 级别的 key：Warn 不占上限额度，否则 Warn 一多会把 Diag 提前限死。
+    // ★ 两个级别各自独立计数、互不挤占额度：Warn 一多不能把 Diag 提前限死，反之亦然。
     private static int _diagKeys;
+    private static int _warnKeys;
 
     private enum Level { Warn, Diag }
 
     // 限流日志唯一入口：
-    //   LogOnce("key", Level.Warn, "msg");           // 一次性告警（不看总闸、无上限）
+    //   LogOnce("key", Level.Warn, "msg");           // 一次性告警（不看总闸、至多 MaxWarnOnce 个 key）
     //   LogOnce("key", Level.Diag, "msg");           // 一次性诊断（看总闸，至多 1 次）
     //   LogOnce("key", Level.Diag, "msg", max: 3);   // 至多 3 次
     private static void LogOnce(string key, Level level, string message, int max = 1)
@@ -178,11 +215,16 @@ public partial class Main : MelonMod
         {
             // ★ 全局条数上限：_logOnce 是「key → 次数」的字典，key 组合
             //   （state.diff / maystack.diff / observe.* 拼上 SafeId）可能随会话无限增长 ⇒
-            //   长会话内存缓慢上涨。复用 MaxDiagOnce。
-            //   ★ 只拦【新增 key】：已经登记、且还有剩余次数的老 key 不能被一起静默。
-            //   （原 T3.3 加在 DiagRate 上的防泄漏口径；合并后对 DiagOnce 同样成立且行为不变 ——
-            //     DiagOnce 的 max 恒为 1，已登记 key 必然 n >= max，本来就会 return。）
-            if (!warn)
+            //   长会话内存缓慢上涨。只拦【新增 key】：已经登记、且还有剩余次数的老 key
+            //   不能被一起静默。
+            //   ★ H1（2026-10-12）：Warn 与 Diag 各自独立计数（_warnKeys / _diagKeys），
+            //     互不挤占额度 —— 但 Warn 也不再无限，防止 key 组合爆炸拖垮长会话。
+            if (warn)
+            {
+                if (_warnKeys >= MaxWarnOnce) return;
+                _warnKeys++;
+            }
+            else
             {
                 if (_diagKeys >= MaxDiagOnce) return;
                 _diagKeys++;

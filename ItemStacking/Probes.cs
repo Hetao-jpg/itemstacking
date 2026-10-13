@@ -39,9 +39,11 @@ public partial class Main
         {
             if (!DiagOn) return;                             // 0.9.0：诊断总闸
             if (_valueProbed.Count >= 40) return;
-            string key = SafeId(item) + "|" + count + "|" + unit;
+            // L4（2026-10-12）：输出统一走 LogOnce（Diag 门控 + 去重限流一处收口）。
+            //   本地 HashSet 仍保留：它同时【门控昂贵的 StackTrace 采集】，不能只靠 LogOnce。
+            string key = "value." + SafeId(item) + "|" + count + "|" + unit;
             if (!_valueProbed.Add(key)) return;
-            Log?.Msg($"[整堆计价] {SafeId(item)}：单价 {unit} × {count} 件 = 总价 {total}");
+            LogOnce(key, Level.Diag, $"[整堆计价] {SafeId(item)}：单价 {unit} × {count} 件 = 总价 {total}", max: 1);
 
             // ★ 0.10.0：打印调用链头部，用于定位「谁在链上先抬价」。
             //   跳过本 mod 自身的 3 帧（Probe → Postfix → Harmony 蹦床），取之后的调用方。
@@ -62,7 +64,7 @@ public partial class Main
                     sb.Append("    ").Append(decl?.FullName ?? "?").Append('.').Append(m.Name).Append('\n');
                     shown++;
                 }
-                Log?.Msg(sb.ToString());
+                LogOnce(key + ".chain", Level.Diag, sb.ToString(), max: 1);
             }
             catch { /* 探针失败不影响计价 */ }
         }
@@ -102,6 +104,8 @@ public partial class Main
 
         double ms = ticks * 1000.0 / Stopwatch.Frequency;
         double us = ms * 1000.0 / calls;
+        // ★ L4 特意【不走】LogOnce：本条是「每 5 秒周期性汇总」，语义就是要反复输出；
+        //   LogOnce 去重会让它只打一次就哑掉。DiagOn 门控已在方法首行完成。
         Log?.Msg($"[状态比较·耗时] 最近 5 秒：调用 {calls} 次 / 累计 {ms:F2} ms / 平均 {us:F2} µs。");
     }
 
@@ -116,10 +120,11 @@ public partial class Main
     //   ③ 我们的 Alt 钳制泄漏（`AltTransferScope` 意外为真）。
     // 本探针只在**非 Alt** 路径、且「**源堆有多件、但原生只给 1 件**」
     // （`item.unitCount > 1 && numTransfer == 1`）时记录 —— 这正是「只搬 1 个」的特征。
-    // 按「容器指针 + numTransfer + item」去重，最多 40 条。
+    // 按「容器指针 + item」去重。
     //   · 命中条目 ⇒ 说明**原生本身就只给 1 件**（问题在抬升点：MaxNumAdd / 委托），
     //     而不是下游闸门吃掉的。
-    private static readonly HashSet<string> _nonAltProbed = new HashSet<string>(StringComparer.Ordinal);
+    // ★ L4（2026-10-12）：原独立 _nonAltProbed HashSet + Log?.Msg 已统一为 LogOnce
+    //   （去重 / DiagOn 门控 / 全局上限一处收口），本地集合删除。
 
     private static void ProbeNonAltMarker(GameItem item, SlotMarker result)
     {
@@ -128,15 +133,13 @@ public partial class Main
             if (!DiagOn) return;                                  // 0.9.0：诊断总闸
             if (item == null || item.unitCount <= 1) return;      // 只看"本来该搬多件"的
             if (result.numTransfer != 1) return;                  // 只看"只给 1 件"的
-            if (_nonAltProbed.Count >= 40) return;
-
-            string key = Ptr(result.inventory).ToString("X") + "|" + SafeId(item);
-            if (!_nonAltProbed.Add(key)) return;
 
             string invId;
             try { invId = SafeId(result.inventory); } catch { invId = "?"; }
-            Log?.Msg($"[转场探针] 非Alt落点只给1件：item={SafeId(item)} ×{item.unitCount}，" +
-                     $"容器id={invId}，targetItem={SafeId(result.targetItem)}，numTransfer={result.numTransfer}");
+            LogOnce("nonalt." + Ptr(result.inventory).ToString("X") + "|" + SafeId(item), Level.Diag,
+                $"[转场探针] 非Alt落点只给1件：item={SafeId(item)} ×{item.unitCount}，" +
+                $"容器id={invId}，targetItem={SafeId(result.targetItem)}，numTransfer={result.numTransfer}",
+                max: 1);
         }
         catch (Exception e)
         {
@@ -213,8 +216,10 @@ public partial class Main
         {
             if (!DiagOn) return;                       // 0.9.0：诊断总闸
             long key = Ptr(slotInv);
+            // M1：先查数量、再 Add。超限【不登记新 key】⇒ 集合不被污染，永不超过 12 条。
+            // （原写法 Add-then-Check 会让第 13+ 个容器也进集合，语义错误：说好「最多 12 条」。）
+            if (_counterProbed.Count >= 12) return;
             if (!_counterProbed.Add(key)) return;      // 同一个容器只打一次
-            if (_counterProbed.Count > 12) return;     // 防御：最多 12 条
 
             var entry = EmporiumEntry.Instance;
             if (entry == null) { Log.Msg("[柜台探针] 本次合并落点容器 = " + Describe(slotInv) +

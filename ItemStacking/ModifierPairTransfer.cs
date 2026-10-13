@@ -88,11 +88,27 @@ public partial class Main
     internal static bool AltPairActive =>
         AltTransferTakeover
         && _altPairEnable != null && _altPairEnable.Value
-        && _altPairMode != null && _altPairMode.Value == "counter_inv";
+        && _altPairMode != null && _altPairMode.Value == Constants.AltPairModeCounterInv;
+
+    // ★★ 2026-10-13（用户定稿）：Alt 改为【转发给 Ctrl 快移的原生逻辑】。
+    //   语义 = 「Alt 与 Ctrl 的目标判定完全一致」：不再由本 mod 自造落点（旧：主仓库↔柜台固定配对），
+    //   而是把状态借给 `ItemQuickTransferHandler`（Ctrl 的 handler）并调用它自己的 OnEventRelease，
+    //   于是 raycast → 父窗口 → 活动容器 → 落点搜索 全部由游戏原生完成。
+    //   本 mod 只保留两件事：① 数量可配（AltQuickTransferAmount，默认 1）；② 机器容器改投空槽。
+    //   生效条件与 AltPairActive 同源，只是模式值换成 "ctrl"。
+    internal static bool AltRelayToCtrl =>
+        AltTransferTakeover
+        && _altPairEnable != null && _altPairEnable.Value
+        && _altPairMode != null && _altPairMode.Value == Constants.AltPairModeCtrl;
 
     // ── Shift 配对生效（cfg: 总闸 + ShiftPairEnable）──
     internal static bool ShiftPairActive =>
         ModifierKeysEnabled && _shiftPairEnable != null && _shiftPairEnable.Value;
+
+    // ★ 2026-10-13：Ctrl 转发重入深度。>0 时：
+    //   · DispatchPairRelease 不再接管（防止"Ctrl handler 的键位若恰是 Alt/Shift"时互相转发）；
+    //   · 其余补丁照常工作（Ctrl 合并闸门 / 机器改投空槽 都要在这次转发里生效）。
+    [ThreadStatic] private static int _relayDepth;
 
     // ── 配对搬运时的「禁止合并」标志（cfg: AltPairMerge 关闭时置位）──
     //   [ThreadStatic] 与 _altTransferScope 同款：只包住本次调用，异常安全。
@@ -159,28 +175,44 @@ public partial class Main
                 "pair-qt", "ItemQuickTransferHandler");
     }
 
+    // ★ 2026-10-13：Alt→Ctrl 转发要用的【本次 keysReleased 集合】。
+    //   为什么必须转发它（反汇编 `ItemQuickTransferHandler::OnEventRelease` 0x7E2090 实证）：
+    //     test rbx, rbx → je 退出        （rbx = keysReleased 形参，null 直接什么都不做）
+    //     keysReleased.Contains(this.key@0x20) 为假 → 退出
+    //   即：原生 Ctrl 搬运**依赖这个集合**，不传 = 静默空转。
+    //   ★ 用 Harmony 的 `object[] __args` 取参而非按名注入：两个 Alt 变体的形参名不一致
+    //     （dump.cs 里一个叫 keysReleased、一个叫 keysPressed），按名注入会在其中一个上
+    //     抛「找不到参数」。`__args[0]` 与名字无关，天然鲁棒。
+    [ThreadStatic] private static object _relayKeys;
+
     [HarmonyPatch(typeof(ItemQuickTransferAltHandler), "OnEventRelease")]
     private static class Patch_PairReleaseAlt
     {
-        private static bool Prefix(ItemQuickTransferAltHandler __instance)
-            => RunPairRelease(__instance,
+        private static bool Prefix(ItemQuickTransferAltHandler __instance, object[] __args)
+        {
+            _relayKeys = (__args != null && __args.Length > 0) ? __args[0] : null;
+            return RunPairRelease(__instance,
                 () => DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
                                           __instance.key, __instance.quickTransferKey),
                 () => __instance.currentItem = null,
                 () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; },
                 "pair-alt", "ItemQuickTransferAltHandler");
+        }
     }
 
     [HarmonyPatch(typeof(ItemQuickTransferAltHandler1), "OnEventRelease")]
     private static class Patch_PairReleaseAlt1
     {
-        private static bool Prefix(ItemQuickTransferAltHandler1 __instance)
-            => RunPairRelease(__instance,
+        private static bool Prefix(ItemQuickTransferAltHandler1 __instance, object[] __args)
+        {
+            _relayKeys = (__args != null && __args.Length > 0) ? __args[0] : null;
+            return RunPairRelease(__instance,
                 () => DispatchPairRelease(__instance, __instance.currentItem, __instance.isQuickTransfer,
                                           __instance.key, __instance.quickTransferKey),
                 () => __instance.currentItem = null,
                 () => { if (Input.GetKeyUp(__instance.quickTransferKey)) __instance.isQuickTransfer = false; },
                 "pair-alt1", "ItemQuickTransferAltHandler1");
+        }
     }
 
     // ── 按键分派：按实例的 key/quickTransferKey 判定修饰键 → 路由到对应配对 ──
@@ -191,6 +223,7 @@ public partial class Main
     private static bool DispatchPairRelease(InputActionHandler inst, GameItem item, bool isQuickTransfer,
                                             KeyCode key, KeyCode quickTransferKey)
     {
+        if (_relayDepth > 0) return false;      // ★ 转发中：不再接管（防互相转发）
         if (!isQuickTransfer) return false;    // 非快移 → 交还原生
         if (item == null) return false;
         if (!ModifierKeysEnabled) return false; // 总闸关 → 交还原生
@@ -199,7 +232,7 @@ public partial class Main
         bool alt   = IsAltKey(key)   || IsAltKey(quickTransferKey);
 
         if (shift) return TryShiftPairTransfer(item);
-        if (alt)   return TryAltPairTransfer(item);
+        if (alt)   return AltRelayToCtrl ? TryRelayItemToCtrl(item) : TryAltPairTransfer(item);
         return false;                          // 其它修饰键（Ctrl 等）→ 交还原生
     }
 
@@ -271,6 +304,126 @@ public partial class Main
         return PairTransferCore(item, showcase, inv, "展示柜", "主仓库", noMerge, "[Shift配对]");
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  ★★ 2026-10-13（用户定稿）：Alt → 转发给「Ctrl 快移」的原生逻辑
+    //
+    //  ── 需求原话 ──
+    //    「把 Alt+鼠标左键点击快移的目标窗口判定，改为和 Ctrl 键一样的逻辑。」
+    //      → 关键点不是"鼠标所在窗口"，而是【不要本 mod 自造落点】，直接复用 Ctrl 那套。
+    //
+    //  ── 做法（不做任何自造判定）──
+    //    把本次按下的状态借给 `ItemQuickTransferHandler`（= 按 Ctrl 的那个 handler），
+    //    然后调用它自己的 `OnEventRelease()` —— 于是
+    //      RaycastElement → TreeNodeRender::FindParentWindow → CanInsertToActiveContainer/
+    //      InsertToActiveContainer → GraphUtils.TryAcceptOnce
+    //    整条链全部由游戏原生完成，与「Ctrl+点击」【逐字节同源】。
+    //    本 mod 只保留两件事：
+    //      ① 数量：转发前把源堆预裁到 `AltQuickTransferAmount`（默认 1），余量归还源容器；
+    //      ② 安全：被转发的这次调用同样受 Ctrl 合并闸门约束 ⇒ 机器容器会自动【改投空槽】。
+    //
+    //  ── 为什么不自造落点判定（上一版的教训）──
+    //    0.7.0 曾自己调 `GameInventory.TryInventorySlot(item,shape,state)`(0x784580) 找空格，
+    //    但那用的是**鼠标当前位置**；Alt 点击时鼠标在源物品上 ⇒ 放置校验全挂 ⇒ numTransfer=0
+    //    ⇒ 什么都不搬。⇒ 复用原生那条链才是唯一稳的。
+    //
+    //  ── 失败面（全部 fail-safe，交还原生 Alt）──
+    //    · 没有 Ctrl handler 实例（未进场景）→ false；
+    //    · Ctrl handler 的键位竟不是 Ctrl（prefab 异常）→ false（防互相转发）；
+    //    · 任何异常 → false。
+    // ══════════════════════════════════════════════════════════════════════
+    private static bool TryRelayItemToCtrl(GameItem item)
+    {
+        try
+        {
+            if (item == null) return false;
+
+            var ctrl = TryGet(() => ItemQuickTransferHandler.current);
+            if (ctrl == null) return false;         // 未进场景 / 未注册 → 交还原生 Alt
+
+            // 防互相转发：Ctrl handler 的键位若其实是 Shift/Alt（prefab 数据异常），不转发。
+            bool notCtrlKey = IsShiftKey(ctrl.key) || IsShiftKey(ctrl.quickTransferKey)
+                           || IsAltKey(ctrl.key)   || IsAltKey(ctrl.quickTransferKey);
+            if (notCtrlKey)
+            {
+                LogOnce("relay-ctrl-key", Level.Warn,
+                    $"[Alt→Ctrl 转发] Ctrl handler 的键位异常（key={ctrl.key} / quickTransferKey={ctrl.quickTransferKey}），" +
+                    "为避免互相转发，本次交还原生 Alt。");
+                return false;
+            }
+
+            // ★ 本次的 keysReleased（Alt handler 收到的那份，直接转交）。
+            //   null 时原生 Ctrl 会「什么都不做」（test rbx,rbx → je 退出），属静默空转，
+            //   故这里明确告警并交还原生 Alt，不留无声失败面。
+            var keys = _relayKeys as Il2CppSystem.Collections.Generic.ISet<KeyCode>;
+            if (keys == null)
+            {
+                LogOnce("relay-keys", Level.Warn,
+                    "[Alt→Ctrl 转发] 取不到本次 keysReleased（类型不符或形参缺失），为避免静默空转，本次交还原生 Alt。");
+                return false;
+            }
+
+            // ① 数量预裁（只裁不丢）
+            int amount = AltQuickTransferAmount;    // 已钳在 [1,9999]；=1 即"逐件快移"
+            if (amount > 0) PreTrimToAmount(item, amount);
+
+            // ② 借状态 + 转发原生 Ctrl 逻辑
+            _relayDepth++;
+            try
+            {
+                ctrl.currentItem = item;
+                ctrl.isQuickTransfer = true;
+                ctrl.OnEventRelease(keys);          // ← 原生 Ctrl：目标判定 + 落点搜索 + 搬运
+                if (DiagOn)
+                    Diag($"[Alt→Ctrl 转发] {SafeId(item)} ×{item.unitCount} 已按 Ctrl 逻辑搬移（数量上限 {amount}）");
+            }
+            finally
+            {
+                _relayDepth--;
+            }
+            return true;                            // 已处理：RunPairRelease 会接着复刻 Alt handler 的尾部清理
+        }
+        catch (Exception e)
+        {
+            if (e is OutOfMemoryException || e is StackOverflowException) throw;
+            LogOnce("relay-ctrl", Level.Warn, $"[Alt→Ctrl 转发] 异常，本次交还原生 Alt: {e.Message}");
+            return false;
+        }
+    }
+
+    // 把 item 预裁到 amount 件（★只裁不丢）：
+    //   拆出的余量走《DestroyFix》同款「归还源容器（含背包兜底）」路径，
+    //   与 `SplitBeforeDestroy + ReturnRemainder` 用的是同一个原语与同一份归还逻辑。
+    //   语义依据（反汇编 §3.2 `GetSplitItem`）：原堆留原处并减少 n，返回的新实例是"拆出的那 n 件"。
+    private static void PreTrimToAmount(GameItem item, int amount)
+    {
+        try
+        {
+            if (item == null || amount <= 0) return;
+            int n = item.unitCount;
+            if (n <= amount) return;                 // 无需裁剪
+
+            var srcInv = TryGet(() => item.parentInventory);
+            GameItem rem = null;
+            try { rem = item.GetSplitItem(n - amount); } catch { }
+            if (rem != null)
+            {
+                ReturnRemainder(rem, srcInv);        // DestroyFix 的余量归还（源容器 → 背包 → 告警）
+                if (DiagOn)
+                    Diag($"[Alt→Ctrl 转发] 预裁数量：{SafeId(item)} {n} → {item.unitCount}，余量 {rem.unitCount} 已归还");
+            }
+            else
+            {
+                LogOnce("relay-trim", Level.Warn,
+                    $"[Alt→Ctrl 转发] 预裁失败（本次可能搬走整堆 {n} 件）：{SafeId(item)}");
+            }
+        }
+        catch (Exception e)
+        {
+            if (e is OutOfMemoryException || e is StackOverflowException) throw;
+            LogOnce("relay-trim-ex", Level.Warn, $"[Alt→Ctrl 转发] 预裁异常（忽略，按原数量搬）: {e.Message}");
+        }
+    }
+
     // ── 公共配对核心（Alt / Shift 共用，O2）──
     //   cA / cB = 两个互为源/目标的配对容器；nameA/nameB 用于日志；tag 为日志前缀。
     //   规则：物品当前在 cA → 搬到 cB；在 cB → 搬到 cA；**两者皆非 → return false 交还原生**（O3a）。
@@ -319,8 +472,18 @@ public partial class Main
         }
         if (!owned)
         {
-            if (DiagOn) Diag($"{tag} 物品非本人所有，拒绝快移（{dir}）：{SafeId(item)}");
-            return true;    // 已处理（不搬），跳过原生 —— 与原生的 IsItemOwned 门语义一致
+            if (DiagOn) Diag($"{tag} 物品非本人所有，不搬（{dir}）：{SafeId(item)}——交还原生按其归属门处理");
+            // ★ H4 取证结论（2026-10-12，反汇编 ItemQuickTransferAltHandler.OnEventRelease 0x7E1620）──
+            //   原生对未拥有物品的处理（两处 IsItemOwned 调用 0x7E1BE3 / 0x7E1CF0）：
+            //     `test al,al; je 0x7E1D4B` → false 分支直跳**共享尾部清理**
+            //     （InputActionManager.ResetAfter + currentItem=null），**不搬、无拒绝音、
+            //     无光标/Toast 等专门反馈** —— 即原生 unowned 分支 = 「静默跳过搬运」。
+            //   但注意：handler 开头有一次**通用释放音效**（AudioManager.TryPlayOne @ 0x7E190E）
+            //     在归属门【之前】播放，原生路径下 unowned 也会响；且尾部清理由原生自己做。
+            //   ⇒ 若此处 return true（跳过原生），会连通用音效+原生清理一起吞掉，
+            //     与「关闭 mod 时」的表现出现可感知差异。故改为 return false 交还原生：
+            //     原生自己走归属门 → 静默不搬 + 响通用音 + 自己清理 ⇒ 与原版逐项一致。
+            return false;   // 交还原生（原生 unowned 分支本身就不会搬）
         }
 
         int amount = AltQuickTransferAmount;     // ≤0 视为整堆（-1）

@@ -1,0 +1,718 @@
+# ============================================================================
+# DOCUMENT: 机器容器拦截方案（Machine Container Interception）
+# SCHEMA: mod-feature-spec/v1
+# PROJECT: ItemStacking (MelonLoader IL2CPP mod for Probably Stolen)
+# TARGET_LANG: C# (net6.0)
+# DATE: 2026-10-12
+# STATUS: 待实施（前置验证未完成）
+# PRIORITY: medium
+# ============================================================================
+
+document:
+  language: zh-CN
+  format: structured-yaml
+  purpose: "定义'机器容器自动拆堆'功能的机制、实现与验证方案"
+  audience: ai-agent + 开发者
+  derived_from:
+    - "物品堆叠机制.md（原版 MayStack / MaxNumAdd / TryAcceptOnce 机制）"
+    - "物品移动机制.md（EndDrag 40 次循环、TryFindOneValidInventorySlot 搜索）"
+    - "物品工厂机制.md（ContainerItemDirectory 容器工厂）"
+
+# ============================================================================
+# 一、需求定义
+# ============================================================================
+requirement:
+  title: "堆叠物品进入机器容器自动拆堆"
+  user_expectation: |
+    玩家拖 N 件堆叠物品到机器容器（熔炉/解序器/酿酒桶等）时：
+    1. 自动拆成单件，逐格填充，直到容器满或物品不足
+    2. 机器容器内【不允许】任何形式的堆叠合并
+    3. 未填完的余量【保留在源位置】，不丢件
+  example:
+    scene: "玩家拖 8 件物品到有 6 个空位的熔炉"
+    expected:
+      - "熔炉 6 格各放 1 件（不合并）"
+      - "源堆剩 2 件，留在原处"
+      - "无需玩家反复操作"
+  motivation: |
+    原版游戏假设 unitCount == 1（从未有堆叠），所有机器逻辑隐含此假设：
+    · Destroy(item) → 销毁整堆（DestroyFix.cs 已修 6 处）
+    · 遍历 items 处理 → 只处理一次（视为 1 件）
+    · 数量计算 → item.unitCount 被当 1 用
+
+    在机器入口【前置拆堆】是治本方案：
+    · 机器内部永远看不到 unitCount > 1 的物品
+    · 无需为每个机器单独写 Prefix 补丁
+    · 未来新增机器只需加名单
+
+# ============================================================================
+# 二、机制分析（为什么选 MayStack + MaxNumAdd 层）
+# ============================================================================
+mechanism_analysis:
+
+  native_capabilities:
+    title: "原版已具备的机制（无需重建）"
+    items:
+      - id: NC1
+        name: TryFindOneValidInventorySlot 的"叠加优先"逻辑
+        source: "物品堆叠机制.md §6"
+        behavior: |
+          阶段③：遍历 items，对每个 other 判 MayStack
+            · true  → marker.targetItem = other（合并候选）
+            · false → continue（跳过，找下一个）
+          阶段④：找不到合并候选 → 走形状扫描找空位
+      - id: NC2
+        name: EndDrag 的 40 次循环
+        source: "物品移动机制.md §5.1 路径 3"
+        behavior: |
+          for (i = 0; i < 40 && currentRemove >= 1; i++):
+              marker = TryFindOneValidInventorySlot(hover, item)
+              if (marker == null || marker.numTransfer < 1) break
+              accepted = TryAcceptOnce(marker, currentRemove)
+              currentRemove -= accepted
+      - id: NC3
+        name: TryAcceptOnce 的自动拆堆
+        source: "物品堆叠机制.md §5.2"
+        behavior: |
+          if (amount >= item.unitCount) → 整堆移动（Expel + Accept）
+          else                          → GetSplitItem(amount) → Accept 拆出的
+          amount = min(请求, numTransfer, MaxNumRemove)
+      - id: NC4
+        name: GetSplitItem 的余量保留
+        source: "物品堆叠机制.md §5.3"
+        behavior: "拆出的 item.unitCount -= n，原堆留原处；新实例 unitCount = n"
+
+    conclusion: |
+      原版机制完备——只要：
+        ① MayStack 拒绝机器容器内的合并（不让走阶段③）
+        ② MaxNumAdd 钳到 1（每次只放 1 件）
+      原生 EndDrag 的 40 次循环就会自动完成"逐格填充"
+
+  missing_pieces:
+    title: "缺的只有：机器容器识别 + 机器容器禁并"
+    items:
+      - id: MP1
+        name: "原版没有'机器容器'概念"
+        consequence: "不知道哪些容器需要特殊处理"
+      - id: MP2
+        name: "原版允许容器内合并（只要有 MayStack）"
+        consequence: "mod 放开堆叠后，机器容器会合并 → 触发 bug"
+
+  layer_choice:
+    title: "为什么在 MayStack + MaxNumAdd 层，而不是 UncheckedAccept 层"
+    rejected_option:
+      layer: "GameGridInventory.UncheckedAccept"
+      reason: |
+        UncheckedAccept 被调用时，物品【已经】被 TryAcceptOnce 拆好或合并好了。
+        在它这层拦截会：
+        · 破坏 TryAcceptAll 的循环语义（0.10.1 已踩过的坑：返 0 打断循环）
+        · 需要重建"拆堆 + 归还"逻辑（重复发明轮子）
+        · 时机太晚——已经错过了"意图决策"点
+    chosen_option:
+      layer: "MayStack（决策层）+ MaxNumAdd（容量层）"
+      reason: |
+        这两层是【意图决策】点：
+        · MayStack 决定"能不能合并" → 返回 false 让原生跳过合并候选
+        · MaxNumAdd 决定"能放几件" → 钳到 1 让原生每次只搬 1 件
+        然后让原生【自己完成循环】——这才是"与游戏机制合谋"
+
+# ============================================================================
+# 三、分层设计方案
+# ============================================================================
+design:
+
+  architecture: |
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ 第 1 层：MayStack —— 机器容器内禁止合并（导流）                │
+    │   · 返回 false → 让原生跳过所有合并候选（阶段③自然落空）        │
+    │   · 与 MergePolicy.Deny 语义一致：不是"拒绝"，是"让路"          │
+    └─────────────────────────────────────────────────────────────────┘
+                                 ↓
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ 第 2 层：MaxNumAdd —— 机器容器内空位容量钳到 1                 │
+    │   · 无论 targetItem 是否为 null，都返回 1                       │
+    │   · 使 marker.numTransfer = 1，TryAcceptOnce 每次只放 1 件     │
+    └─────────────────────────────────────────────────────────────────┘
+                                 ↓
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ 第 3 层：TryAcceptOnce / UncheckedAccept —— 不动               │
+    │   · 完全直通原生                                                │
+    │   · 原生 EndDrag 的 40 次循环自动完成"逐格填充"                │
+    └─────────────────────────────────────────────────────────────────┘
+
+  layer_1_maystack:
+    name: "MayStack 层拦截（机器容器禁并）"
+    location: "MergePolicy.cs · Evaluate 方法内"
+    insertion_point: "步骤 1（容器判据）之前"
+    proposed_code: |
+      // 在 Evaluate 内、现有 IsContainer 判据【之前】插入：
+      // ★ 机器容器：直接 Deny，让原生落点搜索跳过所有合并候选
+      if (IsMachineContainer(ctx.slotInventory))
+      {
+          reason = "机器容器内不允许堆叠";
+          return MergeVerdict.Deny;
+      }
+    rationale: |
+      · 位置在 IsContainer 之前：机器容器判据比"容器含物品"更优先
+        （机器容器内即便有物品也不应走"含物品容器"逻辑）
+      · 返回 Deny：与现有语义一致（NotAllow → MergePolicy 决定落点）
+      · MayStack.Prefix 里已有"Deny → __result = false; return false"
+        → 原生阶段③的 `if (!item.MayStack(other)) continue;` 自然跳过
+    expected_flow: |
+      TryFindOneValidInventorySlot:
+        阶段③ 遍历 items：
+          for other in items:
+              if (!item.MayStack(other)) continue;  ← 我们的 Deny 命中
+          循环耗尽 → 走阶段④
+
+  layer_2_maxnumadd:
+    name: "MaxNumAdd 层容量钳制（机器容器内 1 件）"
+    location: "StackPatches.Value.cs · Patch_MaxNumAdd.Postfix 内"
+    insertion_point: "方法开头（现有逻辑之前）"
+    proposed_code: |
+      [HarmonyPatch(typeof(GameItem), "MaxNumAdd", new[] { typeof(SlotMarker) })]
+      private static class Patch_MaxNumAdd
+      {
+          private static void Postfix(GameItem __instance, SlotMarker slot, ref int __result)
+          {
+              try
+              {
+                  if (slot == null) return;
+
+                  // ★ 机器容器：空位或已有堆都只放 1 件
+                  if (IsMachineContainer(slot.inventory))
+                  {
+                      if (__result != 1)
+                      {
+                          LogOnce("machine.add." + SafeId(__instance), Level.Diag,
+                              $"机器容器内 MaxNumAdd 钳到 1：{SafeId(__instance)}（原 {__result}）",
+                              max: 3);
+                          __result = 1;
+                      }
+                      return;
+                  }
+
+                  // ── 以下为原逻辑（普通容器）──
+                  int before = __result;
+                  var target = slot.targetItem;
+                  if (target != null)
+                  {
+                      // 堆到已有同名堆上
+                      int want = StackCap - target.unitCount;
+                      if (want > __result) __result = want;
+                      // ...（原日志）
+                  }
+                  else if (__result < StackCap)
+                  {
+                      // 空槽
+                      int want = StackCap;
+                      if (want > __result) __result = want;
+                      // ...（原日志）
+                  }
+              }
+              catch (Exception e)
+              {
+                  Log.Error($"MaxNumAdd postfix 异常: {e}");
+              }
+          }
+      }
+    rationale: |
+      · 钳到 1：无论空位还是已有堆，机器容器每次只放 1 件
+      · 早返回：不改动原逻辑（普通容器行为不受影响）
+      · 日志：DiagLog=true 时显示钳制动作（便于排查）
+    why_not_zero: |
+      · 返回 0 → TryAcceptOnce 内部 amount = min(0, ...) = 0 → return 0
+        → 不搬运（等同"拒绝入容器"）
+      · 返回 1 → amount = min(请求, 1, ...) = 1 → 每次搬 1 件（符合期望）
+      · 所以必须返回 1 而不是 0
+
+  layer_3_no_change:
+    name: "TryAcceptOnce / UncheckedAccept 保持直通"
+    note: |
+      这两个方法是原生的核心搬运原语，不改动。
+      让原生的 EndDrag 40 次循环 + TryAcceptAll 逐格填充循环自己完成工作。
+
+# ============================================================================
+# 四、机器容器识别机制
+# ============================================================================
+machine_container_detection:
+
+  token_reuse: |
+    ★ 复用现有 IsContainerInList 的三路 token 匹配（裸 id / slot: / owner:），
+    与 ContainerWhitelist / ContainerBlacklist 共用同一套判据——零学习成本。
+
+  default_tokens:
+    status: "待反汇编确认"
+    placeholder:
+      - "owner:furnace"
+      - "owner:desequencer"
+      - "owner:brewing_barrel"
+      - "owner:incubator"
+      - "owner:concentrator"
+      - "owner:crafting_table"
+    note: |
+      ★ 上述为占位符，需从 ContainerItemDirectory 工厂方法反汇编确认。
+      每个机器的容器物品 identifier（如 "furnace"）→ owner:furnace token。
+
+  code:
+    location: "BuiltinBlacklist.cs（与 DefaultBlock* 同级）"
+    proposed_code: |
+      // ★ 机器容器名单：机器容器内不允许堆叠合并，且每次只放 1 件
+      //   与 ContainerWhitelist 共用 token 匹配（裸 id / slot: / owner:）
+      private static readonly string[] DefaultMachineContainerTokens =
+      {
+          // 待反汇编 ContainerItemDirectory 确认
+          "owner:furnace",
+          "owner:desequencer",
+          "owner:brewing_barrel",
+          "owner:incubator",
+          "owner:concentrator",
+          "owner:crafting_table",
+          // ...
+      };
+
+      private static string[] MachineContainerTokens = DefaultMachineContainerTokens;
+      private static string _machineSource = "代码默认";
+
+      internal static bool IsMachineContainer(GameInventory inv)
+      {
+          if (inv == null) return false;
+          if (MachineContainerTokens == null || MachineContainerTokens.Length == 0)
+              return false;
+          return IsContainerInList(inv, string.Join(",", MachineContainerTokens));
+      }
+
+  external_override: |
+    与 BuiltinBlacklist 一致，支持外置 JSON 覆盖：
+    Mods/item_blacklist.json 里的 "machineContainers" 字段可覆盖代码默认值。
+
+  loading: |
+    在 LoadBuiltinBlacklist() 里增加一段：
+      TryOverride(doc, "machineContainers", ref MachineContainerTokens, ref _machineSource);
+
+# ============================================================================
+# 五、收益分析
+# ============================================================================
+benefits:
+
+  direct_benefits:
+    - id: B1
+      name: 一次拖拽自动填充
+      detail: "玩家拖 N 件，自动铺满 M 格，无需反复操作"
+    - id: B2
+      name: 杜绝机器内合并
+      detail: "从源头阻止堆叠，机器逻辑永远看到 unitCount == 1"
+    - id: B3
+      name: 余量自动保留
+      detail: "原堆 unitCount -= accepted，余量留在原处，符合用户期望"
+    - id: B4
+      name: 零侵入 TryAcceptOnce
+      detail: "避开 0.10.1 踩过的'返 0 打断 TryAcceptAll 循环'的坑"
+
+  architecture_benefits:
+    - id: A1
+      name: 与现有白名单策略协同
+      detail: |
+        机器容器可选择性加入 ContainerWhitelist（虽然不建议），
+        与"机器容器禁并"形成双层防护。
+    - id: A2
+      name: 未来兼容新机器
+      detail: "只需在名单里加 owner:xxx，无需为每个机器写 Prefix 补丁"
+    - id: A3
+      name: 替代现有"逐个机器 Prefix 拆堆"
+      detail: |
+        现有 DestroyFix.cs 有 6 处独立修复：
+          · Patch_ConsumeSecondArg（3 个消费者）
+          · Patch_FurnaceConsume（熔炉 lambda）
+          · Patch_FinishDesequencer（解序器）
+          · Patch_TransferAfterhourToInv（拾荒口袋）
+        
+        上本方案后，熔炉/解序器/升级打印机【在入口就被拆成单件】
+        → 它们内部根本不会看到 unitCount > 1
+        → Prefix 拆堆逻辑可简化甚至移除（保守：双层防护保留）
+
+        ★ 这是从"每个机器后置补救"到"机器容器前置防堆"的架构升级。
+    - id: A4
+      name: 与游戏机制合谋而非对抗
+      detail: |
+        在【意图决策层】修正，让原生自己去完成循环——
+        而不是在【最终落点】拦截、重建原生已具备的能力。
+
+# ============================================================================
+# 六、风险分析
+# ============================================================================
+risks:
+
+  high_risks:
+    - id: R1
+      name: EndDrag 的 40 次循环触发条件不确定
+      severity: high
+      description: |
+        从移动机制 §5.1 看，循环的触发条件是：
+          if (MayPlayerInsertInto(this+0x88) && item.MayHaveValidInventorySlot(this+0x88))
+        · this+0x88 = hoverElement（鼠标悬停元素）
+        · 拖到具体格子 → 可能触发
+        · 拖到容器背景/标题 → 可能不触发，只走路径 2（放 1 件）
+      mitigation:
+        - "阶段 1 实测：拖到熔炉不同位置，观察是否都触发自动填充"
+        - "若不触发：可考虑在 EndDrag Postfix 里加自定义循环（侵入性更强）"
+        - "或接受'拖到格子才自动填充'，玩家一次操作即可学会"
+
+    - id: R2
+      name: 快捷转移（Alt/Ctrl）走 TryAcceptOnce 单次
+      severity: medium
+      description: |
+        从堆叠机制 §5.2 看，快捷转移走 GraphUtils.TryAcceptOnce（单次调用）——
+        不循环。所以 Alt 快移只会放 1 件到机器容器。
+      mitigation:
+        - "接受现状：Alt 快移本来就是'一次搬 1 个'的语义"
+        - "或为机器容器写专门的 TryAcceptAll 循环（增加复杂度）"
+
+    - id: R3
+      name: MaxNumAdd 被多处调用
+      severity: medium
+      description: |
+        MaxNumAdd 被 9 处调用（4× TryInventorySlot / 4× CheckInventorySlotStillValid
+        / GetStackSlot）。钳制到 1 可能影响某些判定。
+      analysis: |
+        · 空位：MaxNumAdd 返回 1 → CheckInventorySlotStillValid 认为'能放 1 件' → numTransfer >= 1 仍成立 → 通过
+        · 已有堆：MaxNumAdd 返回 1 → TryFindOneValidInventorySlot 阶段③的 numTransfer = min(1, 1) = 1
+          → 可能命中合并候选 → ★ 所以第 1 层 MayStack 拦截必不可少
+      mitigation:
+        - "第 1 层 MayStack 拦截确保阶段③跳过合并候选"
+        - "阶段 1 实测：验证 MaxNumAdd=1 后普通容器行为无变化"
+
+  medium_risks:
+    - id: R4
+      name: 机器容器名单不全
+      severity: medium
+      description: |
+        漏了某个机器 → 该机器仍会接受堆叠物品 → 老 bug。
+      mitigation:
+        - "反汇编 ContainerItemDirectory 工厂方法，找全机器容器"
+        - "提供外置 JSON 让玩家自行添加"
+
+    - id: R5
+      name: 老存档里机器容器已有堆
+      severity: medium
+      description: |
+        玩家老存档里机器容器已经有个 unitCount=3 的堆：
+        · MayStack 拦截会阻止新的合并
+        · 但没有修复已有的堆
+      mitigation:
+        - "接受现状：老堆就在那，玩家自己处理"
+        - "或提供'读档时扫描机器容器，把堆拆成单件'的功能（成本高）"
+
+    - id: R6
+      name: 机器容器的 owner: token 不稳定
+      severity: medium
+      description: |
+        游戏更新改了机器的 identifier（如 furnace → smelter），
+        owner:furnace 匹配不上 → 静默失效。
+      mitigation:
+        - "在 ValidatePatches 里做存在性核对（列出所有 owner: 是否在目录里找到）"
+        - "或做'容器特征探测'（如容器 size + 不接受堆叠 = 疑似机器）"
+
+  low_risks:
+    - id: R7
+      name: 与现有 ContainerWhitelist 语义重叠
+      severity: low
+      description: |
+        如果机器容器【不在白名单】（当前默认），玩家本来就放不进去堆叠物品——
+        本方案对这类容器无实际作用。
+      note: "本方案主要服务'玩家手动把机器容器加入白名单'的场景"
+
+    - id: R8
+      name: 机器容器的'1 格 1 件'是硬约束吗
+      severity: low
+      description: |
+        某些机器可能允许格子里放多件（如熔炉允许 1 格 5 件矿石同时熔炼）。
+        如果硬性 1 格 1 件，可能限制玩家的正常玩法。
+      mitigation: "实测每个机器的正确行为，必要时为个别机器开例外"
+
+# ============================================================================
+# 七、实施阶段
+# ============================================================================
+implementation:
+
+  phase_1_validation:
+    name: "阶段 1：验证原生循环行为（1-2 天）"
+    goal: "不写任何新代码，只做观测"
+    steps:
+      - "DiagLog=true 开"
+      - "拖 8 件物品到熔炉/解序器/其他机器"
+      - "观察日志："
+      - "  · 是否触发 EndDrag 路径 3 循环"
+      - "  · 每轮 TryAcceptOnce 的 numTransfer 是多少"
+      - "  · 最终容器放了几件，源堆剩几件"
+      - "记录哪些机器、哪些拖拽位置触发循环"
+    success_criteria:
+      - "确认 EndDrag 循环在机器容器场景下【确实触发】"
+      - "确认循环次数足以填满容器"
+    failure_action: |
+      若循环不触发或触发不足：
+      · 评估在 EndDrag Postfix 里加自定义循环
+      · 或调整方案（可能需要在 UncheckedAccept 层做拦截）
+
+  phase_2_mvp:
+    name: "阶段 2：最小实现（1 周）"
+    goal: "基于阶段 1 结论，实现核心功能"
+    steps:
+      - "实现 IsMachineContainer + 名单（DefaultMachineContainerTokens）"
+      - "实现 MayStack 层拦截（MergePolicy.Evaluate 内）"
+      - "实现 MaxNumAdd 层钳制（Patch_MaxNumAdd 内）"
+      - "不删现有 DestroyFix.cs 的 Prefix（保守：双层防护）"
+      - "ValidatePatches 增加机器容器名单存在性核对"
+    deliverables:
+      - "MachineContainerTokens 名单（从反汇编确认）"
+      - "IsMachineContainer 方法"
+      - "MergePolicy.Evaluate 里的机器容器判据"
+      - "Patch_MaxNumAdd 里的机器容器钳制"
+
+  phase_3_verify:
+    name: "阶段 3：验证与简化（1-2 周）"
+    goal: "完整测试 + 评估是否移除旧补丁"
+    steps:
+      - "完整测试：每种机器 × 每种拖拽方式（见 §测试用例）"
+      - "确认无回归后，评估是否移除 DestroyFix.cs 的部分 Prefix"
+      - "记录实测数据到项目文档"
+
+# ============================================================================
+# 八、测试用例
+# ============================================================================
+test_cases:
+
+  - id: TC1
+    name: 拖 8 件到熔炉（6 空位）
+    input: "拖 8 件 unitCount=8 的物品到熔炉（6 空位）"
+    expected: "熔炉 6 格各 1 件，源堆剩 2 件，源堆留在原处"
+    priority: high
+
+  - id: TC2
+    name: 拖 8 件到解序器（1 空位）
+    input: "拖 8 件到解序器（1 空位）"
+    expected: "解序器 1 件，源堆剩 7 件"
+    priority: high
+
+  - id: TC3
+    name: 拖 8 件到熔炉（已放 1 堆）
+    input: "熔炉已有 unitCount=3 的堆，玩家拖 8 件"
+    expected: "熔炉新增 N 格各 1 件，不与已有堆合并"
+    priority: high
+
+  - id: TC4
+    name: Alt 快移 8 件到熔炉
+    input: "Alt+左键点 8 件物品"
+    expected: "只放 1 件（原生单次语义，接受）"
+    priority: medium
+
+  - id: TC5
+    name: 从机器容器拖出
+    input: "从熔炉里拖出物品到背包"
+    expected: "正常移动（不触发机器判定）"
+    priority: high
+
+  - id: TC6
+    name: 在背包里拖 8 件
+    input: "在背包里拖 8 件到另一个同类堆"
+    expected: "正常合并（不是机器容器）"
+    priority: high
+
+  - id: TC7
+    name: 机器容器已满
+    input: "拖 8 件到已满的熔炉"
+    expected: "全部留在原处，无物品进入"
+    priority: high
+
+  - id: TC8
+    name: 拖 1 件到熔炉
+    input: "拖 1 件（unitCount=1）到熔炉"
+    expected: "正常入 1 格（边界：不需要拆堆）"
+    priority: high
+
+  - id: TC9
+    name: 拖 8 件到未识别为机器容器的容器
+    input: "拖 8 件到普通背包"
+    expected: "正常合并（不受机器容器逻辑影响）"
+    priority: high
+
+  - id: TC10
+    name: 外置 JSON 覆盖机器容器名单
+    input: "Mods/item_blacklist.json 里加 \"machineContainers\": [\"owner:furnace\"]"
+    expected: "只把熔炉当机器容器，其他容器不受影响"
+    priority: medium
+
+# ============================================================================
+# 九、先决条件（必须完成）
+# ============================================================================
+prerequisites:
+
+  reverse_engineering:
+    - id: RE1
+      name: ContainerItemDirectory 工厂方法列表
+      goal: "找全机器容器的 owner: id 全集"
+      method: "反汇编 ContainerItemDirectory.InitDirectory 或 dump 其 factoryDictionary"
+      output: "机器容器 identifier 列表 → owner: token 列表"
+
+    - id: RE2
+      name: MachineFurnace / MachineDesequencer 等是否有其他 unitCount=1 假设
+      goal: "确认本方案能覆盖所有风险点"
+      method: "反汇编各机器的核心方法"
+      output: "额外的假设清单（若有）"
+
+    - id: RE3
+      name: ScavHelper.ScavengeDumpingGrounds 是否遍历垃圾箱物品
+      goal: "确认垃圾箱过夜处理是否需要额外保护"
+      method: "反汇编 0x4FE620"
+      output: "垃圾箱容器的 owner: token（若需要）"
+
+  code_reading:
+    - id: CR1
+      name: EndDrag 40 次循环的实测验证
+      goal: "确认在机器容器场景下循环确实触发"
+      method: "DiagLog=true 实测"
+      output: "日志分析报告"
+
+# ============================================================================
+# 十、总体评估
+# ============================================================================
+summary:
+
+  feasibility: "high"
+  estimated_effort:
+    phase_1: "1-2 days"
+    phase_2: "1 week"
+    phase_3: "1-2 weeks"
+    total: "2-3 weeks"
+
+  code_complexity:
+    new_lines: "30-50 行（不含机器名单）"
+    modified_files:
+      - "MergePolicy.cs（+5 行）"
+      - "StackPatches.Value.cs（+15 行）"
+      - "BuiltinBlacklist.cs（+15 行）"
+      - "Config.cs（+0 行，复用 IsContainerInList）"
+
+  main_benefits:
+    - "一次拖拽自动填充"
+    - "机器内不合并"
+    - "架构上替代逐个机器 Prefix"
+
+  main_risks:
+    - "EndDrag 循环触发条件不确定（需实测）"
+    - "机器名单完整度"
+
+  core_judgment: |
+    方案方向完全正确，且比'在 UncheckedAccept 拦截'更优雅——
+    因为 UncheckedAccept 已经是'最终落点'，而 MayStack + MaxNumAdd 是'意图决策'层。
+    在意图层修正，让原生自己去完成循环——这才是与游戏机制'合谋'而非'对抗'的正确姿势。
+
+  next_action: |
+    先做【阶段 1 验证】（观测日志），不写代码。
+    如果阶段 1 结果乐观：整个方案工作量约 1-2 天，风险可控，强烈推荐做。
+    如果阶段 1 失败：评估在 EndDrag Postfix 里加自定义循环。
+
+# ============================================================================
+# 十一、附录：核心代码骨架
+# ============================================================================
+appendix:
+
+  complete_code_skeleton: |
+    // ══════════════════════════════════════════════════════════════════
+    //  文件 1：BuiltinBlacklist.cs（机器容器名单 + 识别）
+    // ══════════════════════════════════════════════════════════════════
+    
+    // ★ 机器容器名单：机器容器内不允许堆叠合并，且每次只放 1 件
+    //   与 ContainerWhitelist 共用 token 匹配（裸 id / slot: / owner:）
+    private static readonly string[] DefaultMachineContainerTokens =
+    {
+        // 待反汇编 ContainerItemDirectory 确认
+        "owner:furnace",
+        "owner:desequencer",
+        "owner:brewing_barrel",
+        "owner:incubator",
+        "owner:concentrator",
+        "owner:crafting_table",
+    };
+    
+    private static string[] MachineContainerTokens = DefaultMachineContainerTokens;
+    private static string _machineSource = "代码默认";
+    
+    internal static bool IsMachineContainer(GameInventory inv)
+    {
+        if (inv == null) return false;
+        if (MachineContainerTokens == null || MachineContainerTokens.Length == 0)
+            return false;
+        return IsContainerInList(inv, string.Join(",", MachineContainerTokens));
+    }
+    
+    // 在 LoadBuiltinBlacklist 里增加：
+    // anyOverride |= TryOverride(doc, "machineContainers", ref MachineContainerTokens, ref _machineSource);
+
+
+    // ══════════════════════════════════════════════════════════════════
+    //  文件 2：MergePolicy.cs（MayStack 层拦截）
+    // ══════════════════════════════════════════════════════════════════
+    
+    // 在 MergePolicy.Evaluate 内、步骤 1（容器判据）之前插入：
+    
+    // ── 0.5) ★ 机器容器：禁止合并（导流） ──
+    //   理由：机器逻辑假设 unitCount == 1，堆叠会触发 bug。
+    //   手段：Deny → MayStack.Prefix 返回 false → 原生跳过该合并候选。
+    if (IsMachineContainer(ctx.slotInventory))
+    {
+        reason = "机器容器内不允许堆叠";
+        return MergeVerdict.Deny;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════
+    //  文件 3：StackPatches.Value.cs（MaxNumAdd 层钳制）
+    // ══════════════════════════════════════════════════════════════════
+    
+    [HarmonyPatch(typeof(GameItem), "MaxNumAdd", new[] { typeof(SlotMarker) })]
+    private static class Patch_MaxNumAdd
+    {
+        private static void Postfix(GameItem __instance, SlotMarker slot, ref int __result)
+        {
+            try
+            {
+                if (slot == null) return;
+    
+                // ★ 机器容器：空位或已有堆都只放 1 件
+                if (IsMachineContainer(slot.inventory))
+                {
+                    if (__result != 1)
+                    {
+                        LogOnce("machine.add." + SafeId(__instance), Level.Diag,
+                            $"机器容器内 MaxNumAdd 钳到 1：{SafeId(__instance)}（原 {__result}）",
+                            max: 3);
+                        __result = 1;
+                    }
+                    return;
+                }
+    
+                // ── 以下为原逻辑（普通容器）──
+                int before = __result;
+                var target = slot.targetItem;
+                if (target != null)
+                {
+                    int want = StackCap - target.unitCount;
+                    if (want > __result) __result = want;
+                    LogOnce("maxnumadd.stack." + SafeId(__instance) + "/" + SafeId(target),
+                        Level.Diag, $"MaxNumAdd ...", max: 3);
+                }
+                else if (__result < StackCap)
+                {
+                    int want = StackCap;
+                    if (want > __result) __result = want;
+                    LogOnce("maxnumadd.empty." + SafeId(__instance),
+                        Level.Diag, $"MaxNumAdd ...", max: 3);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"MaxNumAdd postfix 异常: {e}");
+            }
+        }
+    }

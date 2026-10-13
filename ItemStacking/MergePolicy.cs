@@ -28,10 +28,12 @@ public partial class Main
     //  三个挂点只负责「搬运」，不再内联判据 —— 改规则只动本文件一处。
     //
     //  ── 固定判定顺序（定稿，三种路径共用）──
-    //    0. 总闸 StackEnabled == false            → Allow（完全交还原生）
-    //    1. 柜台：★ 0.11.0 起已移交 MergeSteerer 作【导流】（返回 false 让原生找空格），
-    //       不再由 Evaluate 拦截 —— 见本文件「阶段3」说明与 Evaluate 内注释。
-    //    2. 容器 IsContainer(target|source)        → Deny
+//    0. 总闸 StackEnabled == false            → Allow（完全交还原生）
+//    1. 柜台：★ 0.11.0 起已移交 MergeSteerer 作【导流】（返回 false 让原生找空格），
+//       不再由 Evaluate 拦截 —— 见本文件「阶段3」说明与 Evaluate 内注释。
+//    1.5 机器容器 IsMachineContainer(slotInventory) → Deny（数据保护；方案 v2，
+//       代码段标签 0.5，实居容器判据之前——机器禁并优先于「含物品容器」判据）
+//    2. 容器 IsContainer(target|source)        → Deny
     //    2.5 ★ 状态一致性 StatesEqual(target,source) → Deny（不可豁免的最终硬闸门）
     //    3. 物品黑名单 GetBlacklistReason          → Deny（id 级；类判据已停用）
     //    4. 容器黑名单 GetExcludeReason（双端）     → Deny
@@ -98,24 +100,43 @@ public partial class Main
             //   跨场景转移只搬极少件（0.9.9 踩过的坑，见 StackPatches.cs 柜台注释）。
             //   ⇒ 柜台「不合并」由 MayStack 层的 Steerer 提前导流实现，本决策不再管柜台。
 
+            // ── 0.5) ★ 机器容器：禁止合并（数据保护）──（方案 v2 §二 deny_vs_steer / §三 第1层）
+            //   背景：原版机器逻辑假设 unitCount == 1（熔炉消耗/解序完成/打印升级等），
+            //   堆入堆叠物品会触发崩坏或丢件；Deny → Patch_MayStack.Prefix 返回 false →
+            //   原生拖放阶段③ `if (!MayStack) continue;` 跳过合并候选，只走空位逐格填充。
+            //   ★ 与 Steerer 的关系：机器容器是「完全禁止合并」（数据保护），
+            //     不走 MergeSteerer.ShouldSteerToEmptySlot（那是「允许合并但优先给空位」）。
+            //   ★ 故障语义：IsMachineContainer 异常时返回 false 但已置 FaultProtection，
+            //     下方第二处 ConsumeJudgeFault 兜住 → Deny（保守，宁可拦不可丢）。
+            if (IsMachineContainer(ctx.slotInventory))
+            {
+                if (ConsumeJudgeFault(FaultProtection)) { WarnPolicyFault("mp.fault.machine", true); return MergeVerdict.Deny; }
+                reason = "机器容器内不允许堆叠";
+                return MergeVerdict.Deny;
+            }
+            if (ConsumeJudgeFault(FaultProtection))
+            { WarnPolicyFault("mp.fault.machine", true); return MergeVerdict.Deny; }   // 判据故障 → 保守拦截
+
             // ── 1) 容器（数据保护）──
             if (IsContainer(ctx.target) || IsContainer(ctx.source))
             {
-                if (ConsumeJudgeFault(FaultProtection)) { WarnOnceOnce("mp.fault.container", true); return MergeVerdict.Deny; }
+                if (ConsumeJudgeFault(FaultProtection)) { WarnPolicyFault("mp.fault.container", true); return MergeVerdict.Deny; }
                 reason = "容器（含内部物品）";
                 return MergeVerdict.Deny;
             }
             if (ConsumeJudgeFault(FaultProtection))
-            { WarnOnceOnce("mp.fault.container", true); return MergeVerdict.Deny; }   // 保护故障 → 拦截
+            { WarnPolicyFault("mp.fault.container", true); return MergeVerdict.Deny; }   // 保护故障 → 拦截
 
             // ── 1.5) ★ 1.0.0 状态一致性（数据保护）【不可豁免的最终硬闸门】──
             //   两件物品的 GameItem.state（TagSystem）必须完全相等才允许合并。
             //   ★ 位置：必须早于「允许」出口，且在白名单 / 物品名单【之前】——
             //     状态不一致是物理事实，任何名单都不能放行（核桃定稿：不可豁免）。
-            //   ★ 故障语义：比较抛异常 = 故障位置 FaultProtection ⇒ 下一行 Deny（宁可不合）。
+            //   ★ 故障语义（2026-10-13 更正）：StatesEqual 自身【不置故障位】—— 它比较抛异常时
+            //     直接冒泡给本方法外层 catch，由那里统一判 Deny（保守）。下面这次 ConsumeJudgeFault
+            //     的作用是【清掉可能残留的故障位】，防止其污染后续判据（与 0.5)/1)/1.6) 同构）。
             bool statesEqual = StatesEqual(ctx.target, ctx.source);
             if (ConsumeJudgeFault(FaultProtection))
-            { WarnOnceOnce("mp.fault.statecmp", true); return MergeVerdict.Deny; }
+            { WarnPolicyFault("mp.fault.statecmp", true); return MergeVerdict.Deny; }
             if (!statesEqual)
             {
                 reason = "状态不同（电量/纯度/品质/磨损等不一致）";
@@ -129,28 +150,39 @@ public partial class Main
             //   ⇒ 「状态相同但偏离默认」的物品（如两件 50% 电量电池）堆叠后，拆分会污染成满电。
             //   ★ 本判据要求：关键 tag（电量/耐久/纯度/品质/液体/次数等，见 ValueGate.cs）的
             //     当前值必须【等于该 identifier 的默认模板值】才可堆，从根上杜绝拆分污染。
+            //   ★ 0.14.0：零值 tag 变体（Constants.ValueGateZeroTags，如赃物热度 STOLEN_VALUE_INT）
+            //     同在本判据内：要求当前值缺省或 == 0（0 热度可堆 / 非 0 不可堆）——
+            //     填补「热度相同但非 0 也能合并」的缺口（模板法对模板上没有的 tag 会 fail-open）。
             //   ★ 故障语义：比较抛异常 = 数据保护故障 ⇒ Deny（宁可拦不可丢）。
-            if (ValueGateEnabled && !AtDefaultState(ctx.target, ctx.source))
+            if (ValueGateEnabled)
             {
+                bool atDefault = AtDefaultState(ctx.target, ctx.source);
+                // ★ P1 修复（2026-10-13）：先消费故障位、再判结果 —— 与 0.5)/1) 两处同构。
+                //   原写法把 ConsumeJudgeFault 放在 `!AtDefaultState` 分支【内】：一旦判据
+                //   「标记了故障位却返回 true」（值域模板获取失败的 fail-open 路径），
+                //   该位会残留下来污染【下一个】判据（误报 mp.fault.blacklist 并 Deny）。
                 if (ConsumeJudgeFault(FaultProtection))
-                { WarnOnceOnce("mp.fault.valuegate", true); return MergeVerdict.Deny; }
-                reason = "偏离默认状态（非满电/非满耐久/非默认纯度/非默认品质等，拆分会污染）";
-                return MergeVerdict.Deny;
+                { WarnPolicyFault("mp.fault.valuegate", true); return MergeVerdict.Deny; }
+                if (!atDefault)
+                {
+                    reason = "偏离默认状态（非满电/非满耐久/非默认纯度/非默认品质/非0热度赃物等，拆分会污染）";
+                    return MergeVerdict.Deny;
+                }
             }
 
             // ── 2) 物品黑名单（按 id；类判据已停用）（数据保护）──
             var block = GetBlacklistReason(ctx.target, ctx.source);
-            if (ConsumeJudgeFault(FaultProtection)) { WarnOnceOnce("mp.fault.blacklist", true); return MergeVerdict.Deny; }
+            if (ConsumeJudgeFault(FaultProtection)) { WarnPolicyFault("mp.fault.blacklist", true); return MergeVerdict.Deny; }
             if (block != null) { reason = block; return MergeVerdict.Deny; }
 
             // ── 3) 容器黑名单（便利）──
             var exclude = GetExcludeReason(ctx.target, ctx.source);
-            if (ConsumeJudgeFault(FaultConvenience)) { WarnOnceOnce("mp.fault.exclude", false); return MergeVerdict.Allow; }
+            if (ConsumeJudgeFault(FaultConvenience)) { WarnPolicyFault("mp.fault.exclude", false); return MergeVerdict.Allow; }
             if (exclude != null) { reason = exclude; return MergeVerdict.Deny; }
 
             // ── 4) 容器白名单（便利）──
             var scope = GetScopeReason(ctx.target);
-            if (ConsumeJudgeFault(FaultConvenience)) { WarnOnceOnce("mp.fault.scope", false); return MergeVerdict.Allow; }
+            if (ConsumeJudgeFault(FaultConvenience)) { WarnPolicyFault("mp.fault.scope", false); return MergeVerdict.Allow; }
             if (scope != null) { reason = scope; return MergeVerdict.Deny; }
 
             // ── 5) 空 identifier：无法判定同名，交给原生（恒 false）。──
@@ -179,7 +211,9 @@ public partial class Main
     //     去重（key 沿用 `mp.fault.*`）：同一 key 仍只告警一次。
     //   ★ 分组由调用点【显式传入】protective，不再靠 key 子串猜测 —— 旧实现把
     //     `mp.fault.statecmp`（实际 return Deny）误判为「便利类·本次放行」，文案与行为相反。
-    private static void WarnOnceOnce(string key, bool protective)
+    //   ★ M2（2026-10-12）：原名 WarnOnceOnce（WarnOnce 再包一层 Only Once）语义混乱，
+    //     按职责改名 WarnPolicyFault = 「合并策略判据故障」告警。
+    private static void WarnPolicyFault(string key, bool protective)
     {
         string group = protective ? "数据保护类" : "便利类";
         string action = protective ? "本次拦截（宁可拦不可丢）" : "本次放行（不影响游玩）";
@@ -198,6 +232,12 @@ public partial class Main
     //   false ⇒ 三挂点退回 0.9.9 各自内联判据的老路径（保留旧代码不删，可二态切换）。
     //   ★ 注意：老路径【不含状态一致性闸门 StatesEqual】（该方法 1.0.0 才引入）——
     //     关闭本开关 = 连状态闸门一起绕过，会放行状态不同的物品合并，故【会改变功能行为】。
+    //   ★★ 2026-10-13 补充：【机器容器 Deny】（0.5 判据，0.13.0 引入）也只在【本条新路径】里，
+    //     老路径（LegacyMergeGateReason / LegacyMayStack / LegacyGetStackSlot）没有该判据。
+    //     而容量层的 Patch_MaxNumAdd 机器钳 1 是【独立补丁、不受本开关控制】。
+    //     ⇒ z9_UseMergePolicy=false 会形成「半开状态」：机器容器内【不再禁并】（老路径放过合并），
+    //        但每格仍只放 1 件 —— 合并到已有堆的路径会重新打开（bottle_printer 等在白名单里的
+    //        机器会重新触发 DestroyFix 修过的崩坏）。本开关仅供排障，切勿长期关闭。
     internal static bool UseMergePolicy => _useMergePolicy == null || _useMergePolicy.Value;
 }
 

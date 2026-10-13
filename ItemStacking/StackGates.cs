@@ -59,7 +59,11 @@ public partial class Main
             // ★ 探针实参延后：Diag 的形参在调用前【急切求值】，故用 if(DiagOn) 守卫 ——
             //   避免默认（DiagLog 关）时仍构造插值串并调用 it.identifier（il2cpp getter）。
             //   IsContainer 每次合并决策被调 ≥2 次，属热点。
-            if (DiagOn) Diag($"IsContainer id={it?.identifier} childCount={children?.Count ?? -1} => {isContainer}");
+            // ★ 0.14.0（用户定稿）：只打 True 行（命中容器的那一件）——
+            //   False（childCount=0）是纯噪音：一次悬停产生十几条 False，淹没真正要看的
+            //   拦截原因；拦截原因由 MayStack/GetStackSlot 的汇总行承担，不丢信息。
+            if (DiagOn && isContainer)
+                Diag($"IsContainer id={it?.identifier} childCount={children?.Count ?? -1} => True");
             return isContainer;
         }
         catch (Exception e)
@@ -207,15 +211,17 @@ public partial class Main
     //   一个都没命中返回 null（调用点据此拼日志原因，保住模式原文）。
     // exempt = 按【identifier】豁免（后缀表用：blank_keycard 命中 *_keycard 但仍放行）。
     // 遍历顺序与合并前的 4 段 foreach 逐字一致：模式串外层 → 先 a 后 b → 命中即返回。
+    // ★ M4（2026-10-12）：identifier 是 il2cpp getter，每次取值跨 native 边界 ——
+    //   外提到 foreach 之前，每条名单只取 2 次（a+b），与名单长度无关。
     private static string MatchIdPair(GameItem a, GameItem b, string[] list,
                                       IdMatch kind, Func<string, bool> exempt = null)
     {
         if (list == null) return null;
+        var ia = a?.identifier;
+        var ib = b?.identifier;
         foreach (var pat in list)
         {
-            var ia = a?.identifier;
             if (MatchesId(ia, pat, kind) && (exempt == null || !exempt(ia))) return pat;
-            var ib = b?.identifier;
             if (MatchesId(ib, pat, kind) && (exempt == null || !exempt(ib))) return pat;
         }
         return null;
@@ -371,7 +377,7 @@ public partial class Main
     }
 
     // 白名单判定（GetScopeReason 与作用域探针共用，避免两处规则漂移）。
-    // 0.9.3：token 匹配抽到 MatchesContainerToken，与黑名单共用一套规则。
+    // 0.9.3：token 匹配与黑名单共用一套规则（判定 = AnyTokenMatches，取值 = ScanTokenNeeds）。
     // ★ 1.0.0：留空 = 【全禁】= 不命中任何容器（与 GetScopeReason 的语义严格一致）。
     //   旧版此处留空返回 true（=不限），会让作用域探针误报「白名单内=是」；已随语义翻转同改。
     private static bool IsContainerWhitelisted(GameInventory inv)
@@ -393,37 +399,99 @@ public partial class Main
     private static bool IsContainerInList(GameInventory inv, string listValue)
     {
         if (inv == null || string.IsNullOrWhiteSpace(listValue)) return false;
+        return IsContainerInTokens(inv, listValue.Split(','));
+    }
+
+    // ★ M5（2026-10-13）：string[] 重载 —— 供【代码内置名单】（已是数组，如机器容器名单）直传，
+    //   免去 `string.Join` 拼串再 `Split` 拆回的一进一出（该路径在热路径上，见 IsMachineContainer）。
+    private static bool IsContainerInList(GameInventory inv, string[] tokens)
+    {
+        if (inv == null || tokens == null || tokens.Length == 0) return false;
+        return IsContainerInTokens(inv, tokens);
+    }
+
+    // ★★ 2026-10-13 修 bug 后重写。原「热路径惰性取值」写法多了一句
+    //   `if (!needId && !needSlot) return false;` —— 当成「空名单才返回 false」，实际把
+    //   **纯 owner: 名单整条裁掉**（owner: 既不消费 id 也不消费 slot）。
+    //   实机后果（用户 2026-10-13 反馈，日志已证）：
+    //     · 机器容器名单（13 项全是 owner:）恒判「不命中」⇒ Deny 与 MaxNumAdd 钳 1 双双静默失效
+    //       ⇒ Ctrl 快移 / Ctrl 拖动把整堆塞进熔炉同一格（numTransfer=10 = StackCap）；
+    //     · 只填 owner: 的自定义 ContainerWhitelist 会「全不命中」⇒ 那些容器里堆叠整体失效。
+    //   ⇒ 结论：只允许把「取值」变懒，**绝不允许裁剪「评估」**。
+    private static bool IsContainerInTokens(GameInventory inv, string[] rawTokens)
+    {
+        if (inv == null || rawTokens == null || rawTokens.Length == 0) return false;
+
+        ScanTokenNeeds(rawTokens, out bool needId, out bool needSlot);
 
         string id = null;
-        try { id = inv.identifier; } catch { }
+        if (needId) { try { id = inv.identifier; } catch { } }
         string slot = null;
-        try { slot = MatchEmporiumSlot(inv); } catch { }
+        if (needSlot) { try { slot = MatchEmporiumSlot(inv); } catch { } }
 
-        foreach (var raw in listValue.Split(','))
+        // 逐条评估（含 owner: 路）—— 命中判定统一走 AnyTokenMatches。
+        return AnyTokenMatches(rawTokens, id, slot, want => OwnerChainMatches(inv, want, 3));
+    }
+
+    // ★★ 纯函数（可单测）——【全工程唯一的容器 token 命中判定】。
+    //   独立成纯函数的原因就是上面这个 bug：原实现把「判定」和「il2cpp 取值」揉在一起，
+    //   一旦有人按「本次是否需要取值」提前返回，owner: 路就被静默裁掉，且**没有任何测试能拦住**。
+    //   现在 id/slot/ownerMatch 全部由调用方注入 ⇒ 单测可传字面量，把三路语义逐条钉死：
+    //     · 纯 owner: 列表 + ownerMatch 命中 ⇒ 必须 true（本次 bug 的回归用例）
+    //     · slot: 列表 + slot 命中 ⇒ true；slot 为 null ⇒ false
+    //     · 裸 id 列表 + id 命中 ⇒ true；id 为 null ⇒ false
+    //   ownerMatch 由调用方保证非 null（本函数另作 null 防御）。
+    internal static bool AnyTokenMatches(string[] rawTokens, string id, string slot, Func<string, bool> ownerMatch)
+    {
+        if (rawTokens == null) return false;
+        foreach (var raw in rawTokens)
         {
-            var p = raw.Trim();
-            if (p.Length == 0) continue;
-            if (MatchesContainerToken(p, inv, id, slot))
+            var token = raw?.Trim();
+            if (string.IsNullOrEmpty(token)) continue;
+
+            if (token.StartsWith(Constants.TokenSlotPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var want = token.Substring(Constants.TokenSlotPrefix.Length).Trim();
+                if (want.Length > 0 && slot != null && string.Equals(slot, want, StringComparison.Ordinal))
+                    return true;
+            }
+            else if (token.StartsWith(Constants.TokenOwnerPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var want = token.Substring(Constants.TokenOwnerPrefix.Length).Trim();
+                if (want.Length > 0 && ownerMatch != null && ownerMatch(want))
+                    return true;
+            }
+            else if (id != null && string.Equals(token, id, StringComparison.Ordinal))
+            {
                 return true;
+            }
         }
         return false;
     }
 
-    // 单 token 匹配（id/slot 由调用方预取，owner 按需上溯 —— 多数 token 不走 owner 分支）。
-    private static bool MatchesContainerToken(string token, GameInventory inv, string id, string slot)
+    // ★ 纯函数（可单测）：扫一遍 token，判定本次需要哪几路「取值」（裸 id / slot:）。
+    //   ⚠️ 它【只决定取值，不决定命中】。返回 (false, false) 时（空列表 / 纯 owner:）
+    //      仍必须把 token 交给 AnyTokenMatches 评估 —— owner: 路正落在这一档。
+    internal static void ScanTokenNeeds(string[] rawTokens, out bool needId, out bool needSlot)
     {
-        if (token.StartsWith("slot:", StringComparison.OrdinalIgnoreCase))
+        needId = false;
+        needSlot = false;
+        if (rawTokens == null) return;
+        foreach (var raw in rawTokens)
         {
-            var want = token.Substring(5).Trim();
-            return want.Length > 0 && slot != null && string.Equals(slot, want, StringComparison.Ordinal);
+            var token = raw?.Trim();
+            if (string.IsNullOrEmpty(token)) continue;
+            if (token.StartsWith(Constants.TokenSlotPrefix, StringComparison.OrdinalIgnoreCase))
+                needSlot = true;
+            else if (!token.StartsWith(Constants.TokenOwnerPrefix, StringComparison.OrdinalIgnoreCase))
+                needId = true;
+            if (needId && needSlot) return;
         }
-        if (token.StartsWith("owner:", StringComparison.OrdinalIgnoreCase))
-        {
-            var want = token.Substring(6).Trim();
-            return want.Length > 0 && OwnerChainMatches(inv, want, 3);
-        }
-        return id != null && string.Equals(token, id, StringComparison.Ordinal);
     }
+
+    // （原 `MatchesContainerToken(string, GameInventory, string, string)` 已删除，
+    //   2026-10-13：单 token 命中逻辑并入 AnyTokenMatches —— 与 GameInventory 解耦后可单测，
+    //   并避免"判定与取值揉在一起"再次被误优化裁掉 owner: 路。见其上方 bug 回顾。）
 
     // 所属物品链任一层是否等于 want（与 DescribeOwnerChain 同一上溯逻辑，逐层比对而非拼串）。
     private static bool OwnerChainMatches(GameInventory inv, string want, int depth)

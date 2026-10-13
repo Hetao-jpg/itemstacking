@@ -139,6 +139,19 @@ public partial class Main
     //   返回 true = 相等（可合）；false = 不等（不可合）。
     //   异常 → 抛给调用方（Evaluate 会 MarkJudgeFault + Deny）。本方法自身不吞异常，
     //   以便「比较过程抛异常 ⇒ 判不等」的保守语义由故障位机制统一处理。
+    //
+    // ── L1 调查记录（2026-10-12，计划任务：先测再决，勿无实测优化）──
+    //   问题：忽略名单非空（默认 42 项）时 Count 快筛禁用，每次全量双向遍历；
+    //         480 物品 × 30+ tag 场景下热路径是否变慢，需实机数据说话。
+    //   测量手段【已就绪，无需新代码】：
+    //     · DiagLog=true ⇒ _stateCmpTimingOn 打开 ⇒ 本方法 finally 累计
+    //       _stateCmpCalls/_stateCmpTicks；
+    //     · 每 5 秒 ReportStateCmpTiming（Probes.cs，由 Main.cs 调度）打印
+    //       「[状态比较·耗时] 最近 5 秒：调用 N 次 / 累计 X ms / 平均 Y µs」。
+    //   决策阈值（计划 L1）：平均 > 50µs → 才考虑缓存"上次比较结果"；
+    //                       平均 < 20µs → 保持现状；20~50µs → 观察，不动。
+    //   ★ 当前状态：未实测 ⇒ 按计划 note 保持现状（不引入缓存失效复杂度）。
+    //     实机数据出来后若落进 >50µs 区间，再开缓存任务。
     // ──────────────────────────────────────────────────────────────────────
     internal static bool StatesEqual(GameItem a, GameItem b)
     {

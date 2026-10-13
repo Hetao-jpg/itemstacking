@@ -50,6 +50,11 @@ public partial class Main
 
     // 容器白名单的代码默认串（★ 类级常量：CreateEntry 与空值回填迁移共用同一份，避免漂移）。
     //   0.12.0 语义反转为「留空=全禁」，故必须给默认常用容器集合，否则旧 cfg 空值会让堆叠全失效。
+    //   ★ 0.13.0 注记：本串里的 `owner:bottle_printer` 是【默认白名单 × 机器容器名单的唯一交叠项】
+    //     —— 它既是白名单容器（允许往里放东西）、又是机器容器（BuiltinBlacklist.DefaultMachineContainerTokens）。
+    //     交叠是有意的：机器名单负责让「瓶子里不发生合并、每格只放 1 件」，维持机器「一槽一实例」语义；
+    //     若把它从机器名单移回纯白名单，会重新触发 DestroyFix.Patch_BottlePrinterUpgradePrinter 修过的崩坏。
+    //     详见《堆叠mod机器拦截方案v3.yaml》§五。
     private const string DefaultContainerWhitelist =
         "owner:storage_bay,owner:storage_bay_large,owner:smuggler_bay,owner:smuggler_bay_mod," +
         "owner:smuggler_bay_mini,owner:machine_bay,owner:machine_bay_ext," +
@@ -118,6 +123,12 @@ public partial class Main
     //   false       = 关闭值域校验（退回只比状态，可能放行「偏离默认」的堆叠）。
     private static MelonPreferences_Entry<bool> _valueGate = null!;
 
+    // ★ L2（2026-10-12 计划·可选阶段）：启动日志分级。
+    //   true（默认） = 逐项明细全打（= 现状，行为不变）。
+    //   false        = 只打「核心汇总 1-2 行」；安全边界 Warning 与 AltPairMode 未知值
+    //                  Warning 不受本项影响（始终输出，故障/配置错误不许静默）。
+    private static MelonPreferences_Entry<bool> _verboseStartup = null!;
+
     // ── 建表（原 OnInitializeMelon 内联段，2026-10-12 抽出；调用点在 Main.cs）──
     //   原顺序：CreateCategory → Log=LoggerInstance → CreateEntry… → 白名单空值迁移 → SaveToFile。
     //   现 Log= 在 OnInitializeMelon 里、CreateCategory 之前赋值（CreateCategory 不用 Log，等价）。
@@ -159,14 +170,23 @@ public partial class Main
             "① 启动自检（加载行 + 补丁目标自检结果）—— 否则无法判断 mod 有没有装上；" +
             "② 故障告警（[防护降级] / Log.Error / 自检失败）—— 否则故障会静默。" +
             "默认关闭；排查问题时再开，正常游戏请保持关闭避免刷屏。");
+        _verboseStartup = cat.CreateEntry<bool>(
+            "VerboseStartup", true,
+            "启动详细日志",
+            "L2（2026-10-12）：关闭后启动时仅输出 1-2 行核心汇总（加载行 + 关闭提示），" +
+            "不再逐项打印白/黑名单内容、修饰键配置、闸门状态等明细。" +
+            "★ 白名单为空的安全告警、AltPairMode 未知值告警不受本项影响，始终输出。" +
+            "排查问题时保持 true（默认）。");
         _stackBlacklist = cat.CreateEntry<bool>(
             "StackBlacklist", true,
             "堆叠保护总闸",
             "0.5.0 起：阻止「有独立状态」的物品被堆叠，避免丢失鉴定/所有权/进度等属性。\n" +
-            "★ 当前（0.12.x）真正生效的拦截有两道：\n" +
-            "  ① 状态一致性闸门（恒定开启，不被本项关闭）：两件物品的完整状态必须【完全相等】才可合并；\n" +
-            "  ② 按 id 自定义黑名单（ItemBlacklist，受本项控制）：内置名单已停用（2026-10-12）。\n" +
-            "关闭本项 = 关掉 ② 的自定义物品黑名单；① 与容器白/黑名单不受影响。\n" +
+            "★ 当前真正生效的拦截：\n" +
+            "  ① 状态一致性闸门（恒定开启，【不被本项关闭】）：两件物品的完整状态必须完全相等才可合并；\n" +
+            "  ② 按 id 的内置黑名单 + 自定义 ItemBlacklist（均受本项控制）。\n" +
+            "  ★ 更正（2026-10-13）：内置 id 黑名单（node/module/keycard/文书类等）已于 2026-10-12\n" +
+            "    【恢复启用】（StackGates.GetBlacklistReason 的 #if true 段），并非停用。\n" +
+            "关闭本项 = 关掉 ② 的【内置 + 自定义】id 黑名单；① 与容器白/黑名单不受影响。\n" +
             "★ 历史：0.8.0 前还有 9 条「类判据」（可鉴定/赃物/未拥有/电量/动物/鼠/酒瓶/耐久/液体容器），" +
             "已被状态一致性闸门完全覆盖（它们是状态比较的真子集），自 0.11.0 起【永久停用、不再有开关】。");
 
@@ -219,9 +239,12 @@ public partial class Main
             "ItemBlacklist", "",
             "物品黑名单（按 id 禁止堆叠）",
             "0.8.0：逗号分隔的物品 identifier，这些物品禁止被堆叠（用于无通用 tag 的特定物品）。" +
-            "★ 内置名单已硬编码在代码里（净水药片 / 能量电池 / 钥匙卡 / 莓果 / 能量阵列 / 模组 / 节点 …），" +
-            "见启动日志的「物品黑名单·内置」行；本项只用于额外自定义。" +
+            "★ 内置名单硬编码在代码里（BuiltinBlacklist.cs）：净水试纸/药片、钥匙卡、莓果与果酿、" +
+            "能量阵列、模组 module/neural_core、节点 node*、文书/名片/刮刮乐类 等（受 StackBlacklist 总闸控制）；" +
+            "本项只用于在此基础上【额外】自定义。" +
             "留空 = 不额外拦截（内置项仍生效）。" +
+            "★ 更正（2026-10-13）：能量电池（energy_credit / energy_credit_ext / energy_credit_breeder）" +
+            "当前【未启用】内置拦截（代码中该三行被注释）—— 若需拦截请在下面按 id 填入。" +
             "★ 值含逗号时请【用引号包起来】：ItemBlacklist = \"foo,bar\"。");
         // ── 柜台禁堆（0.6.5）──
         //   ★ 修复：本项此前只有字段声明、漏了 CreateEntry，导致 OnInitializeMelon 读
@@ -309,6 +332,8 @@ public partial class Main
             "【为什么平时不要关】\n" +
             "旧路径【没有状态一致性保护】：电量/纯度/品质/磨损不同的物品也会被放行合并，\n" +
             "合并后除第一件外全部属性丢失。这不是等价切换，关掉 = 主动拆掉最重要的保护。\n" +
+            "★ 2026-10-13 补充：旧路径也【没有机器容器禁并判据】（0.13.0 新增功能只在 new 路径）——\n" +
+            "  关掉后熔炉/解序器/水瓶打印机等机器容器内会重新允许合并（可能再次触发已修的崩坏/丢件）。\n" +
             "★ 普通玩家：永远保持 true，不要动。\n" +
             "★ 只有排障（怀疑新判定本身有 bug）时才临时关，查明后立刻改回。");
 
@@ -326,9 +351,13 @@ public partial class Main
             "从根上杜绝污染。\n" +
             "【判定颗粒度】\n" +
             "满电可堆 / 非满不可堆；满耐久可堆 / 非满不可堆；默认纯度可堆 / 非默认不可堆；\n" +
-            "默认品质可堆 / 非默认不可堆。关键 tag 清单见 ValueGate.cs 的 ValueGateTags。\n" +
+            "默认品质可堆 / 非默认不可堆。关键 tag 清单见 Constants.cs 的 ValueGateTags。\n" +
+            "★ 0.14.0 起追加「零值 tag」变体（Constants.ValueGateZeroTags）：赃物热度\n" +
+            "  STOLEN_VALUE_INT 必须缺省或为 0 —— 0 热度可堆 / 非 0 不可堆（按字面规则：\n" +
+            "  赃物标记还在但热度=0 仍放行，状态一致性闸门继续管其余差异）。\n" +
             "【什么时候关】\n" +
-            "· false = 关闭值域校验（退回只比状态，可能放行「偏离默认」的堆叠，拆分后污染）。\n" +
+            "· false = 关闭值域校验（退回只比状态，可能放行「偏离默认」的堆叠，拆分后污染；\n" +
+            "  也会一并关掉 0.14.0 的非 0 热度赃物拦截）。\n" +
             "★ 普通玩家：保持 true，不要动。");
 
         _altQuickTransferAmount = cat.CreateEntry<int>(
@@ -342,20 +371,22 @@ public partial class Main
 
         // ── 0.11.0（§四）：Alt 配对模式 + 合并开关 ──
         _altPairMode = cat.CreateEntry<string>(
-            "AltPairMode", "counter_inv",
-            "Alt 快移配对模式",
-            "0.11.0（§四）：按住 LeftAlt 点击（或拖拽）物品时，物品【往哪个容器搬】。两个可选值：\n" +
-            "  · \"counter_inv\"（默认）= 玩家柜台 ↔ 主仓库【双向】：\n" +
-            "      · Alt 点【主仓库】里的物品 → 搬进【玩家柜台】(backInvinvElement 0x98，槽 id = back_inv_save_bag)；\n" +
-            "      · Alt 点【玩家柜台】里的物品 → 搬回【主仓库】(invElement 0x30，槽 id = save_bag)。\n" +
-            "      也就是「把货摆上柜台 / 把货收回仓库」两键完成。\n" +
+            "AltPairMode", Constants.AltPairModeCtrl,
+            "Alt 快移目标模式",
+            "★ 2026-10-13 起【默认 = \"ctrl\"】。按住 LeftAlt 点击物品时，物品【往哪个容器搬】。三个可选值：\n" +
+            "  · \"ctrl\"（默认，推荐）= 【与 Ctrl+点击完全同一条逻辑】：目标判定交给游戏原生\n" +
+            "      （raycast → 父窗口 → 活动容器 → 落点搜索），本 mod 不再自造落点。\n" +
+            "      Alt 因此等价于「Ctrl 快移 + 可自定义数量（AltQuickTransferAmount，默认 1）」。\n" +
+            "  · \"counter_inv\" = 旧行为：玩家柜台 ↔ 主仓库【双向】固定配对\n" +
+            "      （Alt 点主仓库物品 → 进玩家柜台 backInvinvElement 0x98；反之回主仓库 invElement 0x30）。\n" +
             "  · \"native\" = 交还原版：Alt 点主仓库/后仓/柜台前格的物品 → 一律搬进【展示柜】。\n" +
-            "★ 反汇编依据：原版 ItemQuickTransferAltHandler 是硬编码派发器，只做" +
-            "『主仓库/后仓/柜台前格 → 展示柜』，根本没有『柜台 ↔ 主仓库』配对；本项即为此新增。\n" +
-            "★ 搬运复用游戏自身的 GraphUtils.TryAcceptOnce（内部就是逐格填充循环），不自写循环。\n" +
+            "★ 为什么把 \"ctrl\" 设为默认（用户 2026-10-13 定）：Alt 与 Ctrl 用同一套目标判定后，\n" +
+            "  快移行为可预期，且数量由本 mod 控制（默认逐件），不会再出现「整堆一次进一格」。\n" +
+            "★ 机器容器安全：转发后的这次调用同样受 Ctrl 合并闸门约束 —— 机器容器内不会并堆，\n" +
+            "  已有同种物品时会自动【改投空槽】（每格 1 件）。\n" +
+            "★ 数量由 AltQuickTransferAmount 决定；转发前会把源堆预裁到该数量，余量归还源容器（不丢件）。\n" +
             "★ 只搬运【你自己拥有】的物品（非本人所有的不搬，与原生归属门一致）。\n" +
-            "★ 数量由 AltQuickTransferAmount 决定（§四搬运同样受它约束）。\n" +
-            "★ 请照抄双引号内的字符串（含引号）；此值区分大小写，填错 = 退回原版行为。");
+            "★ 旧值 \"counter_inv\" / \"native\" 仍可用；请照抄双引号内的字符串（含引号），区分大小写。");
         _altPairMerge = cat.CreateEntry<bool>(
             "AltPairMerge", true,
             "配对快移时允许合并（Alt/Shift 共用）",
@@ -376,7 +407,11 @@ public partial class Main
         cat.SaveToFile();
     }
 
-    internal static bool StackEnabled => _enableStacking.Value;
+    // ★ 2026-10-13：加 null 兜底 —— MelonLoader 的 HarmonyInit 阶段会先自动 PatchAll 一次，
+    //   那时本 mod 的 cfg 尚未建表（_enableStacking 仍为 null），补丁 Prefix 已可能读本属性。
+    //   原写法 `_enableStacking.Value` 会 NRE（0.9.8 实机首崩同类根因，见 Main.cs 日志注释）。
+    //   未初始化时视为「开启」（保守：补丁行为与 cfg 默认 true 一致）。
+    internal static bool StackEnabled => _enableStacking == null || _enableStacking.Value;
 
     // 1.1.0：价值一致性闸门（cfg ValueGate，默认 true）。
     //   null 兜底 true（尚未初始化时视为开启，保守）。

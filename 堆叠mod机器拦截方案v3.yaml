@@ -1,0 +1,936 @@
+# ============================================================================
+# DOCUMENT: 机器容器拦截方案 v3（v2 落地校正版）
+# SCHEMA: mod-feature-spec/v3
+# PROJECT: ItemStacking (MelonLoader IL2CPP mod for Probably Stolen 0.46D)
+# TARGET_LANG: C# (net6.0)
+# DATE: 2026-10-13
+# STATUS: 已实现（随 mod v0.13.0 合入）—— v2 的「待实施（前置验证未完成）」已作废
+# SUPERSEDES: v2（堆叠mod机器拦截方案v2.yaml）/ v1（堆叠mod机器拦截方案.yaml）
+# LATEST: 2026-10-13 00:33 · §十二=Ctrl 绕过事件定案（根因=当日引入的回归，已修复并部署）
+# AUTHOR_NOTE: |
+#   本文件不是"再写一份方案"，而是【把 v2 与真实代码对齐】：
+#   逐条标注 v2 的设计在代码里落在哪、哪些被修正、哪些仍未验证。
+#   阅读顺序建议：先看 §1 修订摘要与 §2 实现矩阵，再看 §3 起的修正与风险。
+# ============================================================================
+
+document:
+  language: zh-CN
+  format: structured-yaml
+  purpose: "机器容器拦截（自动拆堆）功能的【落地记录 + 残余风险台账】"
+  audience: ai-agent + 开发者
+  derived_from:
+    - "堆叠mod机器拦截方案v2.yaml（设计来源）"
+    - "机器容器identifier中英文对照表.md（RE1 反汇编取证结果）"
+    - "ItemStacking/*.cs（真实代码，逐条对照）"
+    - "资料库/堆叠资料库.md §8.2（EndDrag 落点分支顺序）"
+
+# ============================================================================
+# 一、修订摘要（v2 → v3 到底改了/确认了什么）
+# ============================================================================
+revision_summary:
+  headline: "v2 是一份合格的【设计】；v3 的增量是【事实校正 + 风险台账 + 反例剔除】。"
+
+  v2_corrections:
+    - id: C1
+      v2_said: "STATUS: 待实施（前置验证未完成）"
+      actual: "已实现并合入 mod v0.13.0（本工作区未提交改动）"
+      disposition: "本文件 STATUS 已改；v2 的『阶段1 验证 / 阶段2 MVP / 阶段3 验证』三阶段计划已完成落地（见 §2）"
+
+    - id: C2
+      v2_said: |
+        default_tokens 为占位符（furnace/desequencer/brewing_barrel/incubator/
+        concentrator/crafting_table），"待反汇编确认"。
+      actual: |
+        经 item_catalog.json 逐条核对，v2 占位符里 brewing_barrel / incubator /
+        concentrator / crafting_table / animal_feeder 【在本作物品目录中不存在】—— 系编造 id。
+        真实名单来自「FurnitureItemDirectory / HusbandryDirectory 注册 + Machine* 工厂」，
+        共 13 项（见 §3.1）。
+      disposition: "代码中 DefaultMachineContainerTokens 用的是 13 项真实名单；占位符已剔除"
+
+    - id: C3
+      v2_said: "§九 RE1『找全机器容器 owner: id 全集』priority = blocker"
+      actual: "已由《机器容器identifier中英文对照表.md》完成（含 13 项纳入 + 13 项有意排除的理由）"
+      disposition: "blocker 解除；排除项见 §3.2"
+
+    - id: C4
+      v2_said: "§九 R6 缓解『在 ValidatePatches 里扩展 CheckBlacklistIdsExist』（建议）"
+      actual: "已实现：StackPatches.cs CheckBlacklistIdsExist() 已核对 machineContainers 的 owner:/裸 id"
+      disposition: "R6 缓解已落地（见 §6 R6）"
+
+    - id: C5
+      v2_said: |
+        §三 layer_2 的 proposed_code 未含总闸判断（只写 if (IsMachineContainer(...))）。
+      actual: |
+        真实代码为 `if (StackEnabled && IsMachineContainer(slot.inventory))`。
+        这是必要的：MergePolicy.Evaluate 首行 `if (!StackEnabled) return Allow`，
+        若 MaxNumAdd 钳制不带同一总闸，会出现「Deny 已停用、钳制仍生效」的半开状态
+        （玩家关掉 mod，机器里仍每次只进 1 件）。
+      disposition: "代码比 v2 设计更严谨，v2 的示例代码属简化，不改代码"
+
+    - id: C6
+      v2_said: "deny_vs_steer 选 MergePolicy.Deny（v2 的新增论证）"
+      actual: "已按此实现（MergePolicy.Evaluate §0.5 机器容器 Deny）"
+      disposition: "决策保持；见 §4『与 Steerer 的关系』的边界澄清"
+
+  v3_additions:
+    - "§2 实现矩阵：v2 每条交付物 → 真实代码位置 → 状态（可审计）"
+    - "§3 名单校正：真实 13 项 + 有意排除项（替代 v2 的占位符）"
+    - "§5 白名单 × 机器名单重叠分析（bottle_printer）—— v2 未覆盖，却是本功能最实际的作用面"
+    - "§6 风险台账：v2 的 R1–R8 逐条给『现状 / 是否仍待验证』"
+    - "§7 实机验证清单（残余唯一未完成环节）"
+
+  non_goal:
+    - "不重新论证 v2 的核心设计（两层判据互补 / Deny vs Steerer）—— 该部分已由 v2 §二 论证且被代码采纳"
+    - "不改动任何已通过自检/单测的代码（除 §7 实机反馈驱动的修正）"
+
+# ============================================================================
+# 二、实现矩阵（v2 交付物 → 真实代码 → 状态）
+# ============================================================================
+implementation_matrix:
+  legend:
+    DONE: "已实现，且静态可核（代码/自检/单测）"
+    VERIFIED_STATIC: "已实现 + 已通过编译/单测/启动自检覆盖"
+    PENDING_REAL: "已实现，但需【实机】验证行为（无法离线证明）"
+
+  layers:
+    - layer: "第1层 · 机器容器禁止合并（数据保护）"
+      v2_location: "MergePolicy.Evaluate 内，阶段3注释块之后、IsContainer 之前"
+      code_location: "MergePolicy.cs:111-118"
+      symbol: "if (IsMachineContainer(ctx.slotInventory)) { ... return MergeVerdict.Deny; }"
+      detail: |
+        完整走「判据调用 → ConsumeJudgeFault(FaultProtection) → 未命中则填 reason」模式；
+        新 key `mp.fault.machine` 与 mp.fault.container / statecmp / valuegate 并列。
+      status: VERIFIED_STATIC
+
+    - layer: "第2层 · 机器容器每格只放 1 件（容量层）"
+      v2_location: "StackPatches.Value.cs Patch_MaxNumAdd.Postfix 内，slot==null 早退之后"
+      code_location: "StackPatches.Value.cs:160-177"
+      symbol: "if (StackEnabled && IsMachineContainer(slot.inventory)) { ...; __result = 1; return; }"
+      detail: |
+        比 v2 示例多了 StackEnabled 总闸（见 §1 C5）；带 LogOnce(Diag) 观测钳制动作；
+        早返回，普通容器逻辑逐字节不变。
+      status: VERIFIED_STATIC
+
+    - layer: "第3层 · TryAcceptOnce / UncheckedAccept / MergeSteerer 不动"
+      v2_location: "§三 layer_3_no_change"
+      code_location: "StackPatches.Merge.cs Patch_SlotMarkerTryAcceptOnce（纯观测直通）/ MergeSteerer.cs"
+      detail: "保持 v2 的『不动』。MergeSteerer.ShouldSteerToEmptySlot 未加机器容器判据（Deny 已在 MergePolicy 兜住）"
+      status: VERIFIED_STATIC
+
+  data_definition:
+    - item: "DefaultMachineContainerTokens（13 项默认名单）"
+      code_location: "BuiltinBlacklist.cs:130-145"
+      status: VERIFIED_STATIC
+    - item: "MachineContainerTokens（生效名单，可被 JSON 覆盖）"
+      code_location: "BuiltinBlacklist.cs:148-149"
+      status: VERIFIED_STATIC
+    - item: "IsMachineContainer(GameInventory)（复用 IsContainerInList 三路 token）"
+      code_location: "BuiltinBlacklist.cs:155-169"
+      detail: "null / 空名单 → false；异常 → MarkJudgeFault(FaultProtection) + false（fail-safe + 故障位）"
+      status: VERIFIED_STATIC
+    - item: "JSON 覆盖：item_blacklist.json 的 machineContainers 字段"
+      code_location: "BuiltinBlacklist.cs:232（TryOverride 第 6 组）"
+      status: VERIFIED_STATIC
+
+  verification_infrastructure:
+    - item: "单元测试（数据层）"
+      code_location: "_tests/ItemStacking.Tests/MachineContainerTests.cs"
+      detail: |
+        3 个 Fact：默认名单健全性（全 owner: / 不重复 / 必含 furnace·desequencer·bottle_printer /
+        不得含 fridge·recharger·machine_bay / 不得含编造占位符）、生效名单初值镜像默认、
+        IsMachineContainer(null) fail-safe。已随 27 个测试全绿。
+      status: VERIFIED_STATIC
+    - item: "启动自检（名单 id 存在性核对）"
+      code_location: "StackPatches.cs CheckBlacklistIdsExist() 之 machineContainers 段（约 293-316）"
+      detail: "owner:/裸 id 与 item_catalog.json 比对，查不到则 Msg 告警（R6 缓解）"
+      status: VERIFIED_STATIC
+    - item: "启动汇总日志（名单规模）"
+      code_location: "BuiltinBlacklist.cs LoadBuiltinBlacklist（机器=…）"
+      status: VERIFIED_STATIC
+
+  real_machine_behavior:
+    - item: "拖 N 件到机器容器 → 逐格填充、余量留源、机器内不合并"
+      status: PENDING_REAL
+      blocked_by: "R1（见 §6）—— 无法离线证明，需游戏内实测"
+
+# ============================================================================
+# 三、名单校正（替代 v2 §四 的占位符）
+# ============================================================================
+machine_roster:
+  source_of_truth: "机器容器identifier中英文对照表.md（RE1 反汇编 + item_catalog.json 核对）"
+
+  section_3_1_default_included:
+    title: "真实默认名单（13 项，已写入 DefaultMachineContainerTokens）"
+    items:
+      - token: "owner:furnace"
+        zh: "熔炉"
+        evidence: "FurnitureItemDirectory 注册 + MachineFurnace 工厂；DestroyFix.Patch_FurnaceConsume 已修（崩坏实证）"
+      - token: "owner:desequencer"
+        zh: "密码解序器"
+        evidence: "MachineDesequencer 工厂；DestroyFix.Patch_FinishDesequencer 已修"
+      - token: "owner:bottle_printer"
+        zh: "水瓶打印机"
+        evidence: "MachineBottlePrinter 工厂；DestroyFix.Patch_BottlePrinterUpgradePrinter 已修（★ 见 §5 重叠分析）"
+      - token: "owner:box_dispenser"
+        zh: "箱子分配器"
+        evidence: "MachineBoxDispenser 工厂；分配逻辑按单件假设"
+      - token: "owner:moisture_farm"
+        zh: "水分收集器"
+        evidence: "MachineMoistureFarm 工厂"
+      - token: "owner:water_purifier"
+        zh: "净水器"
+        evidence: "MachinePurifier 工厂"
+      - token: "owner:wine_rack"
+        zh: "催陈器"
+        evidence: "MachineWineRack 工厂"
+      - token: "owner:livestock_feed_dispenser"
+        zh: "牲畜饲料分配器"
+        evidence: "HusbandryDirectory 注册"
+      - token: "owner:blender"
+        zh: "搅拌机"
+        evidence: "MachineBlender.CreateTooltip 引用 id + 目录确认"
+      - token: "owner:chem_finisher"
+        zh: "化学成品机"
+        evidence: "MachineChemFinisher.CreateTooltip 引用 id + 目录确认"
+      - token: "owner:heating_plate"
+        zh: "加热板"
+        evidence: "MachineHeatingPlate.CreateTooltip 引用 id + 目录确认"
+      - token: "owner:hydroponic"
+        zh: "水培系统"
+        evidence: "PreBuiltItemHelper.CreateHydroponic + MachineHydroponic.LoadHydroponicModuleInvData"
+      - token: "owner:3d_printer"
+        zh: "3D打印机"
+        evidence: "MachinePrinter（item_3d_printer_*）+ 目录确认；别名条目 printer 同物"
+
+  section_3_2_intentionally_excluded:
+    title: "有意排除（不在默认名单，玩家可经 JSON 加回）"
+    categories:
+      - name: "储物型（默认白名单已在用、无崩坏证据；纳入会改变现行堆叠玩法 = R8 回归风险）"
+        tokens: ["fridge", "recharger", "machine_bay", "machine_bay_ext"]
+      - name: "无物品输入格"
+        tokens: ["cassette_player", "powerblock", "security_alarm", "mirage_projector", "deal_maker", "test_gizmo"]
+      - name: "非容器（工具类）"
+        tokens: ["turbo_booster", "turbo_booster_adv"]
+      - name: "行为未取证（可经 JSON 试用）"
+        tokens: ["vending_machine"]
+        note: "StoreVendingMachine 对堆叠的遍历行为未取证，无崩坏实证 → 不默认纳入"
+
+  section_3_3_fabricated_tokens:
+    title: "v2 占位符证伪（目录中不存在，勿照抄）"
+    tokens: ["brewing_barrel", "incubator", "concentrator", "crafting_table", "animal_feeder"]
+    note: |
+      仅存在说明文书 be_barrel_usage_guide / be_incubator_usage_guide / be_concentrator_usage_guide
+      （扩展模组的指南），对应机器实体 id 未知。装了扩展模组时先用游戏内目录/日志确认真实 id
+      再经 machineContainers 添加。
+
+# ============================================================================
+# 四、与 MergeSteerer 的边界（v2 决策的落地复核）
+# ============================================================================
+deny_vs_steer_recheck:
+  decision: "机器容器 → MergePolicy.Deny（数据保护）；不进 MergeSteerer"
+  code_evidence:
+    - "MergePolicy.cs:107-110 注释明确『完全禁止合并（数据保护），不走 ShouldSteerToEmptySlot』"
+    - "MergeSteerer.cs ShouldSteerToEmptySlot 只覆盖：配对快移(Alt/Shift) / AltTransferScope / 柜台"
+  consistency_check:
+    - question: "机器 Deny 后，原生如何继续？（会不会变成『不合并也不填充』？）"
+      answer: |
+        不会。Deny 只作用于 MayStack/GetStackSlot（返 false）。
+        原生 `TryFindOneValidInventorySlot` 对候选堆调 MayStack；false → `je loop_top`（跳过该候选）
+        → 最终落到它自己的【空槽分支】。这正是 v2 §二 NC1/NC2 的机制。
+        资料库 §8.2 已实锤：EndDrag 路径 1 = `MayPlayerInsertInto → TryFindOneValidInventorySlot
+        → TryAcceptOnce（×≤40 次循环）`——自动填充的循环在【路径 1】，不在 Deny 所封的路径 2。
+  cross_path_coverage:
+    title: "各合并路径是否都被机器 Deny 覆盖（防绕过）"
+    rows:
+      - path: "鼠标拖放（EndDrag 路径2 堆叠分支）"
+        gate: "MayStack / GetStackSlot → MergePolicy"
+        covered: true
+      - path: "Alt 快移 / Shift 配对（自写 Prefix → GraphUtils.TryAcceptOnce）"
+        gate: "TryAcceptOnce 内部逐格循环 → TryFindOneValidInventorySlot → MayStack"
+        covered: true
+        note: "ModifierPairTransfer.cs TryAcceptOnceInto 走原生 GraphUtils.TryAcceptOnce，故经 MayStack；非绕过"
+      - path: "Ctrl 快移（CtrlTransferScope 闸门）"
+        gate: "Patch_SlotMarkerTryAcceptOnce 阶段1 → GetMergeGateReason"
+        covered: true
+      - path: "Alt 配对 noMerge 模式"
+        gate: "MergeSteerer.ShouldSteerToEmptySlot 返 true（导流）"
+        covered: true
+        note: "导流 = MayStack false → 空槽；与机器 Deny 同向，不冲突"
+      - path: "★ 落点抬升（GameGridInventory 硬编码 numTransfer=1 → 抬到 StackCap）"
+        gate: "0.13.0 起加了 `!IsMachineContainer(...)` 排除（防御性加固，见 StackPatches.AltTransfer.cs 非 Alt 分支）"
+        covered: true
+        note: |
+          该段直接改写 numTransfer，【绕过 MaxNumAdd 钳制】。机器容器正常是 GameSlotInventory
+          （本补丁只挂 GameGridInventory 实现）⇒ 默认不触发；加排除是为防「机器容器改用
+          GameGridInventory」时一次拖拽把多件塞进机器一格。属纵深防御。
+  conclusion: |
+    ⚠️ 【2026-10-13 被实机证伪，见 §十一】原结论「上述路径无一绕过机器 Deny」不成立：
+    用户实测 Ctrl+鼠标点击快移 与 Ctrl+鼠标拖动 都能把整堆塞进熔炉的同一个格子。
+    本节的『covered: true』只在【判据被正确执行且容器被识别】的前提下成立；
+    实机表明这两个前提至少有一个不成立。以 §十一 为准。
+
+# ============================================================================
+# 五、★ v3 新增：白名单 × 机器名单重叠分析（v2 未覆盖）
+# ============================================================================
+whitelist_machine_overlap:
+  why_it_matters: |
+    v2 的 R7 说「机器容器若不在白名单，玩家本来就放不进去堆叠物品——本方案对这类容器无实际作用」。
+    该说法【只对『合并』成立，对『放置』不成立】，需要更正：
+      · 放置（target == null）在 MergePolicy 第一步 `if (ctx.target == null) return Allow` 就放行了，
+        【不看白名单】；而容量层 MaxNumAdd 的空槽分支会把 numTransfer 抬到 StackCap。
+      · ⇒ 在本方案之前，往【任何】机器容器的空槽拖 N 件，会被抬到 StackCap(默认 10) ⇒ 一次塞进一格
+        —— 这才是 DestroyFix 系列崩坏（机器假设一槽一实例）的默认数据通路。
+      · ⇒ 本方案的 MaxNumAdd 钳 1 对【所有】机器容器默认生效（与白名单无关）；
+        Deny 则补上「不与已有堆合并」。所以本功能【默认即生效，且不依赖白名单】。
+
+  overlap:
+    token: "owner:bottle_printer"
+    in_whitelist: true
+    in_machine_list: true
+    whitelist_source: "Main.cs DefaultContainerWhitelist（17 项 owner: 之一）"
+    machine_source: "BuiltinBlacklist.cs DefaultMachineContainerTokens"
+    functional_effect: "惰性（无实际差别）"
+    analysis: |
+      · 合并：机器 Deny 在 Evaluate 的【0.5 步】、白名单在【第 4 步】⇒ 机器命中即 Deny，白名单永不参与。
+      · 放置：Evaluate【第 0 步】就 Allow，白名单同样不参与。
+      ⇒ 对 bottle_printer 而言，它是否在白名单里【不改变任何行为】——该白名单条目是「死配置」。
+      它唯一的作用面是：若玩家用 JSON `machineContainers: []` 显式关闭机器拦截，
+      该条目会重新变成「允许在瓶子里合并」的活配置。
+    v2_proposal_recap: |
+      v2 之前的《优化实施方案.md》批1 §五 决定「机器容器靠白名单排除、不写新补丁」——
+      由本节 analysis 可见：那只挡了『合并』、挡不住『放置』，故 v2 的机器钳制是本项目真正补上的那块。
+    disposition:
+      - "决定：保留 owner:bottle_printer 白名单条目（不改默认行为；避免动用户可见默认值）"
+      - "已做（文档层）：Main.cs 启动提示由『机器容器请勿加入白名单』更正为
+         『机器已由机器容器名单单独拦截，写入白名单也不会堆叠』"
+      - "已做（文档层）：Config.cs DefaultContainerWhitelist 旁加注说明其与机器名单的交叠与惰性"
+      - "已做（注释层）：MergePolicy 回滚开关注释 + cfg z9 描述补上『关掉 new 路径会失去机器 Deny』"
+      - "可选（待实机）：确认水瓶打印机里『拖 N 件 → 逐格铺开』符合玩家预期（见 §7 TC-BP）"
+
+  other_whitelisted_machines: "无。其余 12 项机器 token 均不在默认白名单。"
+
+# ============================================================================
+# 六、风险台账（v2 R1–R8 的现状）
+# ============================================================================
+risk_ledger:
+  - id: R1
+    name: "EndDrag 循环触发条件不确定（拖到格子 vs 拖到背景）"
+    v2_severity: high
+    current_status: "仍待实机验证（唯一未闭环项）"
+    offline_finding: |
+      资料库 §8.2 已实锤：×≤40 次循环属【路径 1 普通放置】（MayPlayerInsertInto →
+      TryFindOneValidInventorySlot → TryAcceptOnce 循环）。机器 Deny 令 MayStack=false，
+      正是把原生推向这条路径 —— 机制上自洽。
+      ⇒ 结论：只要「拖到机器容器的某个格子」使 hoverElement = 该格，路径 1 即触发，
+        自动填充成立；「拖到容器背景/标题」是否同样进入路径 1，需实机确认。
+    mitigation_in_code: "无（机制层面已自洽；若实机显示需更强填充，再评估 EndDrag Postfix 自写循环）"
+    residual_action: "见 §7 TC1–TC3"
+
+  - id: R2
+    name: "快捷转移单次调用（Alt 快移只放 1 件）"
+    v2_severity: medium
+    current_status: "已按 v2 决定【接受现状】"
+    detail: |
+      Alt/Shift 配对快移走原生 GraphUtils.TryAcceptOnce（内部逐格循环），并非「单次」——
+      v2 的担忧部分已被 ModifierPairTransfer 的实现化解：它复用原生循环。
+      每次搬运件数由 AltQuickTransferAmount 控制（默认 1）。
+    residual_action: "无（属设计语义）"
+
+  - id: R3
+    name: "MaxNumAdd 被 9 处调用，钳 1 可能影响判定"
+    v2_severity: medium
+    current_status: "已实现早返回（仅机器容器分支）；普通容器逻辑逐字节不变"
+    detail: |
+      钳制只在 IsMachineContainer(slot.inventory) 为真时生效并 return，
+      机器 token 与普通容器不重叠 ⇒ 误伤面为零。
+    residual_action: "见 §7 TC-M（普通容器回归）"
+
+  - id: R4
+    name: "机器名单不全"
+    v2_severity: medium
+    current_status: "RE1 已收口（13 项）；外置 JSON 可增（machineContainers）"
+    residual_action: "新机器/扩展模组经 JSON 添加；名单规模见启动日志 [名单] … 机器=…"
+
+  - id: R5
+    name: "老存档里机器容器已有堆"
+    v2_severity: medium
+    current_status: "维持『接受现状』"
+    detail: "MayStack Deny 阻止新的合并，但不修复既有堆（不写读档扫描拆堆，成本高）"
+    residual_action: "玩家自行处理；若反馈强烈再评估读档拆堆"
+
+  - id: R6
+    name: "机器 owner: token 不稳定（游戏改名 → 静默失效）"
+    v2_severity: medium
+    current_status: "★ 缓解已实现（v2 只是『建议』）"
+    detail: "StackPatches.cs CheckBlacklistIdsExist() 已核对 machineContainers 的 owner:/裸 id，查不到即告警"
+    residual_action: "无（已有启动告警兜底）"
+
+  - id: R7
+    name: "与 ContainerWhitelist 语义重叠（机器不在白名单则本方案无作用）"
+    v2_severity: low
+    current_status: "★ 现状已澄清：默认存在一个交叠项 bottle_printer（见 §5），功能非『无作用』"
+    residual_action: "无"
+
+  - id: R8
+    name: "『1 格 1 件』是硬约束吗（某些机器可能允许格内多件）"
+    v2_severity: low
+    current_status: "维持默认硬约束；未逐机器开例外"
+    residual_action: "实机观察各机器；确有必要再引入『机器例外表』（当前不做，避免过度设计）"
+
+# ============================================================================
+# 七、残余待办（唯一未完成环节：实机验证）
+# ============================================================================
+pending_real_machine_verification:
+  note: |
+    代码侧已闭环（编译 0 警告 0 错误 + 27 单测全绿 + 启动自检覆盖）。
+    唯一无法离线证明的是【运行时行为】——即 v2 §八 的 TC1–TC14。
+    下列为按『最可能出现偏差』排序的实机清单，建议 DiagLog=true 执行。
+
+  checklist:
+    - id: TC1
+      name: "拖 8 件 → 熔炉（6 空位）"
+      expect: "6 格各 1 件；源堆剩 2 件；源堆留在原处"
+      observe: "[Diag] 是否出现机器 Deny / 多次 MaxNumAdd 钳 1 日志；EndDrag 路径 1 是否触发"
+      priority: high
+    - id: TC2
+      name: "拖 8 件 → 解序器（1 空位）"
+      expect: "解序器 1 件；源堆剩 7 件"
+      priority: high
+    - id: TC3
+      name: "熔炉已有 ×3 堆，拖 8 件"
+      expect: "新增 N 格各 1 件，不与已有堆合并"
+      priority: high
+    - id: TC-BP
+      name: "★ v3 新增：拖 N 件 → 水瓶打印机（默认白名单 × 机器名单的唯一交叠项）"
+      expect: "逐格各 1 件；不发生合并（验证 §5 的『默认即生效』）"
+      priority: high
+    - id: TC5
+      name: "从机器容器拖出"
+      expect: "正常移动，不触发机器判定"
+      priority: high
+    - id: TC-M
+      name: "普通容器（背包/仓储）拖 8 件"
+      expect: "正常合并至 StackCap（MaxNumAdd 钳制不影响）"
+      priority: high
+    - id: TC7
+      name: "机器容器已满时拖入"
+      expect: "全部留在原处，无物品进入，无丢件"
+      priority: high
+    - id: TC11
+      name: "机器判据异常路径"
+      expect: "IsMachineContainer 抛异常 → FaultProtection → Deny（保守）；[防护降级] 文案 [合并决策] 数据保护类…本次拦截"
+      priority: medium
+    - id: TC-ALT
+      name: "Alt/Shift 配对快移 → 目标为机器容器时的行为"
+      expect: "复用原生循环 → 经 MayStack → 机器 Deny → 空槽逐件铺开；不合并"
+      priority: medium
+    - id: TC-LOG
+      name: "启动日志 [名单] 行"
+      expect: "出现『机器=13』；若装了 item_catalog.json 且某机器 id 改名 → [名单自检] 机器容器名单有 N 项…告警"
+      priority: medium
+    - id: TC-REM
+      name: "★ v3 新增：销毁修复的余量归还是否守恒（对应 §10 not_changed DestroyFix 项）"
+      how: "DiagLog=true，在水瓶打印机触发升级（拿一叠电子元件），观察 [销毁修复] 日志与容器内数量"
+      expect: |
+        · 触发前记录：源容器该物品总数 T、打印机内该物品总数 P。
+        · 触发后应满足 T' + P'（含被消耗的 1 件）= T + P - 1（数量守恒，无静默蒸发）。
+        · 若出现「余量未归还 / 数量对不上」，则 ReturnRemainder 的 accepted/leftover 契约有问题，
+          需要反汇编 GraphUtils.TryAcceptAllMid（0x766650 系）确认其是否就地减少源物品 unitCount。
+      priority: medium
+      purpose: "把『静态无法定论』的余量守恒变成实机可观测项"
+
+  exit_criteria: "上述 TC1/TC2/TC3/TC-BP/TC5/TC-M/TC7 全通过 ⇒ 本功能可视为验收完成"
+
+# ============================================================================
+# 八、与既有优化文档的关系
+# ============================================================================
+relationship_to_existing_docs:
+  - doc: "优化实施方案.md（批1 白名单安全边界 / 批2 状态一致性 / 批3 增强）"
+    relation: |
+      批1 的 §五『生产机器类容器 → 靠白名单排除（不写新补丁）』是【v2 出现之前的决定】。
+      本方案（v2/v3）是它的【演进】：从『靠白名单一刀切排除』升级为『机器容器 = 不合并 + 每格 1 件』，
+      让玩家既能往机器里放东西（白名单允许）、又不会因堆叠触发机器崩坏。
+      ⇒ DestroyFix.cs 的 6 处 Prefix【保守保留】（双层防护），与批1『不贸然删除』一致。
+  - doc: "代码审查报告.md（12 项已修）"
+    relation: "本轮机器容器实现未引入上述已修问题；MachineContainerTests 覆盖数据层回归。"
+  - doc: "mod优化方向.txt（20 条待评估）"
+    relation: |
+      机器容器属该清单之外的新需求（由玩家反馈驱动）。清单里的 P0『每物品堆叠上限』
+      仍在 优化实施方案.md §八 中【明确不做】，与本方案无冲突。
+
+# ============================================================================
+# 九、结论
+# ============================================================================
+conclusion:
+  one_line: "v2 设计正确且已落地；v3 的价值是【把『待实施』改成『已实现』、剔除编造名单、补上白名单交叠分析、给出残余风险台账】。"
+  code_side: "闭环（编译 0 警告 0 错误 + 27 单测全绿 + 启动自检覆盖）"
+  remaining: "仅剩实机验证（§7 清单），非代码问题"
+  recommendation: |
+    1. 按 §7 跑一遍实机（DiagLog=true），重点 TC1/TC3/TC-BP。
+    2. 通过后把本功能随 mod 版本号一起发布（已把 ModVersion 提到 0.13.0，见 §10）。
+    3. DestroyFix.cs 的 6 处 Prefix 继续保留，待机器功能长期稳定后再评估简化。
+
+# ============================================================================
+# 十、★ 本轮配套代码修复（2026-10-13，随 v3 一起落地）
+# ============================================================================
+code_changes_this_round:
+  scope: "全量代码审查（静态通读 22 个 .cs）后，修掉机器容器实现周边发现的缺陷 + 顺带的一致性/热路径优化。"
+  build_test: "dotnet build -c Release：0 警告 0 错误；dotnet test：27/27 通过。"
+  changes:
+    - id: FIX-A
+      severity: P1
+      title: "值域校验静默 fail-open + 故障位残留污染后续判据"
+      files: ["ValueGate.cs", "MergePolicy.cs"]
+      problem: |
+        · GetDefaultState 取默认模板失败（如 PlayerStore.Instance 暂为 null）时返回 null，
+          AtDefaultState 把「模板不可用」与「该物品无关键 tag」混为一谈 ⇒ `defaults == null` 直接
+          `return true`（放行）⇒ 整道值域闸门对该物品【静默跳过】（fail-open），
+          与文件头『异常 → 置 FaultProtection 并返回 false』的承诺相反，会重新引入拆分污染。
+        · MergePolicy 的值域块把 `ConsumeJudgeFault` 放在 `!AtDefaultState` 分支【内】——
+          一旦判据「置了故障位却返回 true」，该位会残留并污染下一个判据（误报 mp.fault.blacklist 拦截）。
+      fix: |
+        · GetDefaultState：失败时 MarkJudgeFault(FaultProtection) + 返回 null（null 专表「模板不可用」）；
+          「无关键 tag」返回【空字典】并缓存。失败结果不缓存（保留重试恢复的机会）。
+        · AtDefaultState：`if (defaults == null) return false;`（保守拦截）`if (defaults.Count == 0) return true;`。
+        · MergePolicy：改为「先取结果 → 立即消费故障位 → 再判」，与 0.5)/1) 两处同构。
+
+    - id: FIX-B
+      severity: P2
+      title: "Patch_MaxNumAdd 机器判据异常时的容量层 fail-open"
+      files: ["StackPatches.Value.cs"]
+      problem: |
+        IsMachineContainer 异常 → 置 FaultProtection + 返回 false；容量层只信 false ⇒ 空槽分支把
+        numTransfer 抬到 StackCap ⇒ 一次放多件进机器格（破坏了本功能的核心不变量）。
+        MergePolicy 那层对同一故障位有兜底，容量层原先没有。
+      fix: "容量层补故障位兜底：`if (!machine && ConsumeJudgeFault(FaultProtection)) machine = true;`（保守钳 1）。"
+
+    - id: FIX-C
+      severity: P2
+      title: "容器归属判据未纳入启动自检（静默失效面）"
+      files: ["StackPatches.cs"]
+      problem: |
+        parentInventory 与 GameInventory.GetParentItem 被改名时：容器归属取不到、owner: token 链匹配
+        恒 false ⇒ 容器白/黑名单与【机器容器判据】整体静默失效，而自检仍报「通过」。
+      fix: "ValidatePatches 增补 `get_parentInventory`(GameItem) 与 `GetParentItem`(GameInventory) 两项自检。"
+
+    - id: FIX-D
+      severity: P2
+      title: "StackEnabled / CtrlTransferMergeGate 缺 null 兜底"
+      files: ["Config.cs", "StackPatches.AltTransfer.cs"]
+      problem: |
+        MelonLoader 在 HarmonyInit 阶段先自动 PatchAll 一次，此时 cfg 尚未建表（字段为 null），
+        补丁 Prefix 已可能读这两个属性 ⇒ NRE（0.9.8 实机首崩同类根因）。
+        （其它 Apply 属性如 AltTransferTakeover 早已带 `!= null` 兜底，这两个漏了。）
+      fix: "StackEnabled 改为 `_enableStacking == null || _enableStacking.Value`（未初始化视为开启）；
+            Ctrl 闸门进入判断改为 `_ctrlTransferMergeGate == null || !_ctrlTransferMergeGate.Value`。"
+
+    - id: FIX-E
+      severity: P2
+      title: "配置描述与实现不符（两处）"
+      files: ["Config.cs"]
+      problem: |
+        · StackBlacklist 描述称「内置名单已停用（2026-10-12）」——实际 StackGates.GetBlacklistReason
+          的 #if true 段【已恢复启用】。
+        · ItemBlacklist 描述把「能量电池」列为内置拦截项——实际 energy_credit* 三行【已注释掉】；
+          且引用了一条不存在的启动日志行「物品黑名单·内置」。
+      fix: "两处描述按实际改写（含『本项关闭 = 关掉内置+自定义两段』的更正）。"
+
+    - id: FIX-F
+      severity: P2
+      title: "机器名单 token 查不到时告警级别过低"
+      files: ["StackPatches.cs"]
+      problem: |
+        机器 token 在目录里查不到 = 对应机器堆叠拦截静默失效（数据保护级），
+        却与「目录不全」的内置 id 名单同用 Log.Msg（Diag 级可见度）。
+      fix: "机器名单缺失改为 Log.Warning（并保留『目录不全亦可能导致』的如实说明）。"
+
+    - id: FIX-G
+      severity: P2
+      title: "注释失真 + 回滚开关的『半开状态』未写明"
+      files: ["MergePolicy.cs", "Config.cs"]
+      problem: |
+        · statesEqual 处注释称 StatesEqual 会置故障位——实际它只抛异常、不置位（故障位由外层 catch 兜）。
+        · z9_UseMergePolicy=false 会让【机器容器 Deny 消失】而 MaxNumAdd 钳制仍在 —— 半开状态未写明。
+      fix: "更正注释；在 MergePolicy 回滚注释与 cfg z9 描述中补上『关掉 new 路径会失去机器 Deny』的警示。"
+
+    - id: FIX-H
+      severity: P2
+      title: "Alt 落点抬升未排除机器容器（防御性加固）"
+      files: ["StackPatches.AltTransfer.cs"]
+      problem: |
+        「GameGridInventory 硬编码 1 件 → 抬到 min(StackCap, unitCount)」直接改写 numTransfer，
+        绕过 MaxNumAdd 的机器钳制。机器容器正常为 GameSlotInventory（不触发），但存在潜在绕过点。
+      fix: "该抬升分支加 `!IsMachineContainer(__result.inventory)` 排除（纵深防御）。"
+
+    - id: FIX-I
+      severity: P2
+      title: "启动提示『机器容器请勿加入白名单』已过时"
+      files: ["Main.cs"]
+      problem: "白名单为空时的安全提示仍按旧语义劝阻；机器容器现在由专用判据拦截，写入白名单也不会堆叠。"
+      fix: "改写为『机器已由 machineContainers 名单单独拦截（合并被拒 + 每格 1 件）』并给自定义机器的配置指引。"
+
+    - id: OPT-1
+      severity: P3（性能）
+      title: "IsContainerInList 热路径：按 token 类型惰性取值 + string[] 重载"
+      files: ["StackGates.cs", "BuiltinBlacklist.cs"]
+      problem: |
+        · IsMachineContainer 每次调用都 `string.Join(",", tokens)` 再被 Split 拆回（两次分配）。
+        · IsContainerInList 无条件读 `inv.identifier` 并调 MatchEmporiumSlot（8 次 il2cpp getter +
+          8 次指针比对）——而机器名单全是 owner: token，【根本用不到槽位路】。
+          IsMachineContainer 又在热路径上（每格 MaxNumAdd + 每次合并决策都调）。
+      fix: |
+        · 新增 IsContainerInList(GameInventory, string[]) 重载（供内置数组名单直传）。
+        · 抽出 IsContainerInTokens：先扫一遍 token 判断需要哪几路（裸 id / slot:），再按需取值。
+          语义等价（id 仅被裸 token 消费、slot 仅被 slot: 消费、owner: 两者都不用）。
+
+  not_changed_and_why:
+    - item: "MaxNumAdd 机器钳制用 `!= 1 → 1`（会把合法的 0 抬成 1）"
+      reason: |
+        计划 §三 why_not_zero 明确选『保证 1』以避免『机器永远收不到物品』；且被占用槽的合并路径
+        已被 MayStack Deny 挡住 ⇒ 抬高 0 不会造成实际超填。属语义小瑕疵，维持现状（不引入
+        未经实机验证的语义变更），留待实机若发现问题再收窄为 `> 1 → 1`。
+    - item: "GetScopeReason 用 target.parentInventory 而非 ctx.slotInventory"
+      reason: |
+        两值在当前拖放/快移下等价（已在 Evaluate 头注释说明容器权威源）。改用 slotInventory 是
+        语义变更，风险 > 收益，维持现状（仅在头注释保留说明）。
+    - item: "DestroyFix.ReturnRemainder 的余量计算依赖 TryAcceptAllMid 的契约"
+      reason: |
+        `accepted >= remainder.unitCount` 与 `leftover = remainder.unitCount - accepted` 是否自洽，
+        取决于 TryAcceptAllMid 是否【就地减少源物品 unitCount】。静态无法定论（需反汇编 0x766650 系）。
+        已在 §7 增补 TC-REM 实机观察项；未反汇编取证前不擅改（改错会引入真丢件）。
+    - item: "判据注册表化 / Evaluate 结果缓存 / 每物品堆叠上限"
+      reason: "沿用《优化实施方案.md》既定结论（不做），与本方案无冲突。"
+
+# ============================================================================
+# 十一、★ 实机反例与新一轮分析（2026-10-13，Ctrl 路径绕过机器拦截）
+# ============================================================================
+ctrl_bypass_analysis:
+  trigger: "用户实机反馈（2026-10-13 00:23，部署版本 = 本仓库 0.13.0 产物，md5 与 bin/Release 一致）"
+  symptom: |
+    【问题1】Ctrl + 鼠标左键点击快移（堆叠到目标窗口）、Ctrl + 鼠标拖动整堆
+    —— 两条路径都能让整堆物品**绕过机器容器判据**，进入熔炉内部并在**同一个格子**里堆叠。
+    即：v3 §四 的「四条路径无一绕过」结论被证伪。
+  impact: "机器容器「一槽一实例」的硬前提被破坏 ⇒ 用户提出的【深层需求】：机器工作失常（原版不识别 unitCount>1）。"
+
+  established_facts:
+    title: "已确证的事实（有文档/反汇编出处，非推断）"
+    facts:
+      - id: F1
+        fact: "`SlotMarker.TryAcceptOnce(amount)` 的数量语义 = `amount = min(amount<0?numTransfer:amount, numTransfer, MaxNumRemove)`；≤0 直接返回 0。"
+        source: "游戏物品移动机制.md §3.2（0x7B0020）"
+        implication: "「一次进一格多少件」= 这三个值的【最小值】⇒ 钳量必须落在其中一个上。"
+      - id: F2
+        fact: "EndDrag 兜底循环：`for(i<0x28/*40*/ && currentRemove>=1)` → `TryFindOneValidInventorySlot` → `SlotMarker.TryAcceptOnce(marker, currentRemove)`。"
+        source: "游戏物品移动机制.md §5.1 路径 3"
+        implication: "拖放路径（含 Ctrl+拖动整堆，currentRemove=整堆）走这里；每次循环放 min(currentRemove, numTransfer)。"
+      - id: F3
+        fact: "Ctrl 快捷转移（ItemQuickTransferHandler.OnEventRelease）**分三支**：① 命中标签 → FindChildrenType 逐项 → `GraphUtils.TryAcceptOnce`；② `CanInsertToActiveContainer` 为真 → `GraphUtils.InsertToActiveContainer`（返回 void）；③ 否则 → `GraphUtils.TryAcceptOnce`。"
+        source: "游戏物品移动机制.md §5.2"
+        implication: "Ctrl 路径有三个子分支，其中 ② 是「整件插入活动容器」，最可能是「整堆原样进一格」的通道。"
+      - id: F4
+        fact: "`GraphUtils.TryAcceptOnce / TryAcceptAll / InsertToActiveContainer / CanInsertToActiveContainer` 的**内部实现未反汇编**（原文标注 ❓）。"
+        source: "游戏物品移动机制.md 末尾「未验证项」第 6 条"
+        implication: |
+          ⇒ 「Ctrl 是否真的经 `SlotMarker.TryAcceptOnce`」【离线无法定论】：
+            本仓库另一处注释（StackGates.cs）称经它，而 §5.2 的措辞是「不走 SlotMarker」——
+            两者都是推断。**这是决定修法的唯一未知量**。
+      - id: F5
+        fact: "机器（冰箱/瓶打印机/模块仓/动物笼/工具箱）的内库存是 `GameGridInventory`；机器物品带 `STANDARD_MACHINE_TAG`（标准机器标记，`MachineHelper::LoadUpgrade` 用它判机器）。"
+        source: "游戏容器机制解析/容器清单.md §三 / §六"
+        implication: |
+          · 「机器 = 带 STANDARD_MACHINE_TAG 的物品」是一个【机器无关】的识别路，可作为名单的补充/替代；
+          · 但它会把冰箱/充能器等「储物型机器」也纳入 ⇒ 与 v3 §三 有意排除项冲突（R8 回归风险）。
+      - id: F6
+        fact: "`MaxNumAdd` 的机器钳 1 只在 `IsMachineContainer(slot.inventory)` 为真时生效；`IsMachineContainer` 依赖 `owner:` 链（`inv.GetParentItem()` 上溯 ≤3 层）或裸 id 匹配。"
+        source: "本仓库 BuiltinBlacklist.cs:155 / StackGates.cs:431"
+        implication: |
+          若机器内库的 `GetParentItem()` 链取不到 id=`furnace` 的物品（例如机器是【世界摆放物】、
+          其内库不在任何物品的 parentInventory 之下），则 `owner:furnace` **永不命中** ⇒
+          Deny 与钳 1 两层**同时静默失效** —— 与实机现象完全吻合。
+
+  root_cause_hypotheses:
+    title: "根因候选（按可能性排序，均需一条实机日志定死）"
+    hypotheses:
+      - id: H1
+        name: "机器识别失败（最可能）"
+        reasoning: "F6：owner: 链取不到 furnace ⇒ IsMachineContainer 恒 false ⇒ Deny 与钳 1 都不触发。实机'绕过层层判定'与此一致。"
+        decide_by: "探针打印的『机器判据=false』+『容器=… 所属=<顶层容器>』"
+      - id: H2
+        name: "Ctrl 快移绕过 SlotMarker.TryAcceptOnce（分支② InsertToActiveContainer）"
+        reasoning: "F3/F4：若 Ctrl 走 `InsertToActiveContainer`（void、直落 L1 UncheckedAccept），则任何挂在其后的判据都不会被调用。"
+        decide_by: "复现时探针【看不到】`[落点观测·放置]` 行"
+      - id: H3
+        name: "数量由上游写死，钳不住"
+        reasoning: "F1/F2：即使经 SlotMarker，若上游已把 numTransfer 写成整堆且 MaxNumRemove 也很大，则 min(...) 仍是整堆。"
+        decide_by: "探针行的 numTransfer 数值"
+
+  options:
+    - id: OPT-1
+      name: "思路1（用户提出）：把 Alt 快移的目标判定向 Ctrl 看齐，Alt 成为「可自定义数量（默认 1）」的快移键"
+      feasibility: "中"
+      feasibility_notes: |
+        · 复用现有 Alt 配对快移基础设施（ModifierPairTransfer.cs：TryAcceptOnceInto / NativeTailCleanup /
+          按键分派 / AltQuickTransferAmount）—— 已有骨架。
+        · 缺的那块是【目标容器判定】：原生 Ctrl 用 RaycastElement + TreeNodeRender::FindParentWindow
+          取"命中元素的父窗口"（§5.2 ②），本 mod 目前没有"按鼠标落点取窗口"的实现，
+          需新增（挂点/字段待反汇编，属未验证面）。
+        · 若改为"接管 Ctrl 键"（Patch ItemQuickTransferHandler.OnEventRelease 返回 false 自己搬），
+          还要复刻 Ctrl 的三分支语义，否则会破坏 Ctrl 在非机器场景的正常手感。
+      benefit: |
+        · Alt 变成唯一"数量可控"的快移键 ⇒ **快移路径**不再可能一次塞多件；
+        · 符合"把危险行为收敛到一个人可控的键"的直觉。
+      risk: |
+        · ⚠️ **不覆盖 Ctrl+拖动**：Ctrl+拖动走的是 EndDrag（与普通拖动同一条路径，只是 currentRemove=整堆），
+          键级改造对它无效 ⇒ **需求 1 只解决一半**（这也是本方案最大的问题）。
+        · 需要新写"落点窗口判定"，属未验证面；失败表现为 Ctrl 快移手感异常（比"堆叠进机器"更难回滚）。
+        · 与 ContainerSuite 等同样占用 Alt 的 mod 冲突面扩大。
+      verdict: "不推荐单独采用（解决不了 Ctrl+拖动）。可作为 OPT-2 之后的补充：把快移统一收到 Alt。"
+
+    - id: OPT-2
+      name: "思路2（推荐）：把「每格 1 件」下沉到公共瓶颈，并让【策略】按容器是否在白名单决定"
+      feasibility: "高（改动小）、但有一处已知不可知风险"
+      design: |
+        A. 收窄点：`SlotMarker.TryAcceptOnce` 的 `amount`（或 `marker.numTransfer`）。
+           · F1 表明：`amount = min(amount, numTransfer, MaxNumRemove)` ⇒ 把任一钳到 1 即「每格最多 1 件」。
+           · 这是**唯一能同时盖住 Ctrl+点击 与 Ctrl+拖动**的机制（两者最终都调用它，见 F2）。
+        B. 判据：`!IsContainerWhitelisted(落点容器)`（= 非白名单一律"每格 1 件 + 不合并"）。
+           · 机器容器默认不在白名单 ⇒ 自动覆盖**所有机器**（含未知/扩展机器），不依赖名单完整度
+             ⇒ 正面回答用户的【深层需求】。
+           · 白名单容器行为逐字节不变（背包/仓储/柜台/展示柜照常堆叠）。
+      benefit: |
+        · 一次改动同时解决 问题1（Ctrl 两条路径）+ 深层需求（机器通用，不依赖名单）；
+        · 白名单本就是"安全边界"的唯一语义入口，与既有架构一致（不新增概念）；
+        · 无需先修 owner: 识别（H1 被绕过而不是被修）。
+      risk: |
+        · ⚠️ **不可知风险（必须先实测）**：`TryAcceptOnce` 被钳后走「部分移动」分支
+          `GetSplitItem(item, 1)`（§3.2）⇒ 未被接受的余量**留在光标/源物品上**。
+          EndDrag 清理段有 `if (item.parentInventory == null) → 回收/销毁` 虚调用
+          （§5.1 清理）⇒ **理论上存在"余量被回收"的丢件路径**。这正是项目「0.10.1 踩过的坑」
+          （在 TryAcceptOnce 层动结果会打断上层循环语义）的同类风险。
+          ⇒ 未经实测【不能默认开启】。
+        · 对"非白名单容器"改变了放置手感（整堆拖入会铺开成一格一件，余量留在光标）；
+          需在 cfg 说明里写清，并提供回滚开关。
+      verdict: "方向正确且最省事；但必须先在【诊断探针确认链路】之后，再做受控实测。"
+
+    - id: OPT-3
+      name: "思路3（兜底/补强）：修机器识别 —— owner: 之外增加机器无关的判据"
+      feasibility: "中（识别路依赖 GetParentItem 是否可用）"
+      design: |
+        · 主判据：`owner:` 链（现状）。
+        · 补判据：所属物品带 `STANDARD_MACHINE_TAG`（F5）⇒ 机器无关，覆盖扩展模组机器。
+        · 但需叠加【排除表】把冰箱/充能器/真空机器人等「储物型机器」放行（沿用 v3 §三 的排除结论），
+          否则会回归 R8（这些容器默认白名单在用、玩家确实在里面堆叠）。
+      benefit: "不依赖 id 名单的完整度；能自动覆盖未来的新机器。"
+      risk: |
+        · 排除表又变成一份需要维护的名单（与"机器无关"的初衷部分抵消）；
+        · 所有判据仍共用 `GetParentItem()` 这一前置依赖 —— 若 H1 的根因是它取不到机器物品，
+          OPT-3 同样失效（所以 OPT-2 的"不依赖识别"更有价值）。
+      verdict: "与 OPT-2 互补：OPT-2 负责「漏网的也不堆」，OPT-3 负责「已识别的连放都不让放」。"
+
+  decisive_experiment:
+    title: "★ 决定性实验（一条日志即可定案，零风险）"
+    how: |
+      1. cfg 打开 `DiagLog = true`，重启游戏。
+      2. 复现两个动作：① Ctrl+左键点击 一叠物品快移到熔炉；② Ctrl+拖动一叠物品到熔炉。
+      3. 抓日志里这两类行：
+         · `[落点观测·放置] 整堆入【空槽】候选：… 容器=… 机器判据=… marker.numTransfer=…`
+         · `机器容器内 MaxNumAdd 钳到 1：…`（若出现，说明识别与钳制至少一个在工作）
+    interpretation:
+      - "看到 `[落点观测·放置]` ⇒ Ctrl 路径**确实**经 SlotMarker.TryAcceptOnce（H2 排除）⇒ OPT-2 的钳点有效。"
+      - "看不到 ⇒ Ctrl 路径绕过它（H2 成立）⇒ 需改钳 `GraphUtils` 链（TryAcceptOnce / InsertToActiveContainer）。"
+      - "行里 `机器判据=false` 且 `所属=<顶层容器>` ⇒ H1 成立（owner: 链取不到机器）⇒ OPT-3 的补判据必要。"
+      - "行里 `marker.numTransfer=` 的数值 ⇒ 判断 H3。"
+    why_not_guess: |
+      项目铁律「不可知风险的方法默认不用」+ 上一轮"Ctrl 已覆盖"的误判，都指向同一件事：
+      在拿到这条日志前不动钳量逻辑。故本轮【只加探针，不改行为】。
+
+  recommendation:
+    - "第 1 步（本轮已做）：只加诊断探针（DiagLog 门控，零行为改动），跑决定性实验拿到日志。"
+    - "第 2 步：按日志落点选 OPT-2（最好）或 OPT-3；OPT-2 落地时必须带 cfg 开关 + 受控实测（余量守恒）。"
+    - "第 3 步（可选）：快移统一收到 Alt（OPT-1）—— 只解决快移手感，不作为主修法。"
+    - "不删 DestroyFix 的 6 处 Prefix：在机器入口真正被堵死之前，它们仍是唯一的兜底。"
+
+  code_added_this_round:
+    file: "StackPatches.Merge.cs（Patch_SlotMarkerTryAcceptOnce 阶段2）"
+    what: "新增 `[落点观测·放置]` 日志（DiagLog=true 时、空槽 + 源为堆时输出）"
+    behavior_change: "无（纯只读日志）"
+
+# ============================================================================
+# 十二、★ 结论：根因 = 本仓库当日引入的回归（实机已定案）
+# ============================================================================
+ctrl_bypass_resolution:
+  status: "已修复（2026-10-13 00:31 构建，00:33 部署；实机复测待用户执行）"
+
+  decisive_log:
+    source: "用户 2026-10-13 00:29 实测日志（Ctrl+拖动 scrap_metal ×10 到熔炉）"
+    key_line: |
+      [落点观测·放置] 整堆入【空槽】候选：scrap_metal ×10，
+        容器=id=<空id>  类=GameGridInventory  槽位=<不在EmporiumEntry内>
+        所属=furnace  内含=<空>，机器判据=False，marker.numTransfer=10
+    readings:
+      - "出现本行 ⇒ Ctrl 路径【确实】经 SlotMarker.TryAcceptOnce ⇒ H2 排除；本层钳量有效（快移也受控）。"
+      - "`所属=furnace` ⇒ owner 链【能】取到机器物品 ⇒ H1 排除；F6 的假设成立，名单机制本身没问题。"
+      - "`机器判据=False` ⇒ IsMachineContainer 明明该 true 却返回 false ⇒ 判据被跳过。"
+      - "`marker.numTransfer=10` ⇒ MaxNumAdd 的机器钳 1 也没生效，空槽分支把它抬到了 StackCap(10)。"
+
+  root_cause:
+    one_line: "★ 不是原设计缺陷，而是 2026-10-13 本轮『热路径惰性取值』优化里的一句提前 return —— 把纯 owner: 名单整条裁掉。"
+    detail: |
+      `IsContainerInTokens` 当时写成：
+          ScanTokenNeeds(...);                      // 扫出 needId / needSlot
+          if (!needId && !needSlot) return false;   // ← 罪证：当成"空名单才返回 false"
+          ...
+      而 `owner:` token 【既不消费 id 也不消费 slot】⇒ 机器容器名单（13 项全是 owner:）
+      必然落进 (false,false) ⇒ 直接 return false ⇒ 永远「不命中」。
+    impact:
+      - "机器容器拦截两层（MergePolicy Deny + MaxNumAdd 钳 1）【同时静默失效】⇒ 整堆进机器一格。"
+      - "连带（同源、同样严重）：只填 owner: 的自定义 ContainerWhitelist 会「全不命中」⇒ 那些容器里堆叠整体失效。（含 slot: 的默认白名单不走这一档，故默认配置察觉不到 —— 典型的静默失效面。）"
+    why_missed: |
+      纯函数测不到调用方（IsContainerInTokens 需 il2cpp 的 GameInventory），
+      当时的 3 个单测只覆盖了名单数据层（DefaultMachineContainerTokens 内容），
+      没有覆盖「纯 owner: 列表 → 命中」这条判定路径 ⇒ 回归无声通过。
+
+  fix:
+    files: ["StackGates.cs", "Constants.cs"]
+    design: |
+      · 把【命中判定】提成纯函数 `internal static bool AnyTokenMatches(tokens, id, slot, ownerMatch)`：
+        三路（裸 id / slot: / owner:）在【同一个循环】里逐条评估，结构上不存在"提前 return"。
+      · `ScanTokenNeeds` 只保留「本次是否需要取 id / slot」这一件事，并在注释里写明
+        「它只决定取值，不决定命中」。
+      · `IsContainerInTokens` = 扫描 → 按需取 id/slot → 交 AnyTokenMatches。
+        ⇒ 键点：**只允许把「取值」变懒，绝不允许裁剪「评估」**。
+      · 删除 `MatchesContainerToken(string, GameInventory, ...)`（逻辑并入 AnyTokenMatches，
+        与 GameInventory 解耦后即可单测 —— 这正是它当初躲过测试的原因）。
+    regression_guard:
+      - "新增 `_tests/ItemStacking.Tests/ContainerTokenMatchTests.cs`（11 例）：
+         ScanTokenNeeds 各路取值矩阵；AnyTokenMatches 三路命中；**纯 owner: 名单 + owner 命中 ⇒ true**；
+         用【真实 DefaultMachineContainerTokens】+ id/slot 全 null 跑一遍（= 实机那一档）。"
+      - "源码形状守门：断言 StackGates.cs（剥注释后）永不出现 `!needId && !needSlot) return false`，
+         且必须调用 AnyTokenMatches —— 纯函数测不到调用方，故用形状断言补上这道闸。"
+      - "测试总数 29 → 39。"
+
+  consequences_for_the_three_options:
+    OPT-1_alt_alignment: "仍不推荐（不覆盖 Ctrl+拖动）。"
+    OPT-2_non_whitelist_one_per_slot: |
+      ★ 结论：**不需要做**。它当初的动机是"名单可能识别不到机器"；现已证实名单机制有效
+      （owner: 链可达 furnace）。而 OPT-2 附带"余量可能被回收"的不可知丢件风险 ⇒
+      在 OPT-3（名单/补判据）已足够的前提下，不做才是对的（合乎项目「不可知风险的方法默认不用」）。
+    OPT-3_tag_based_identification: |
+      仍然【可选】：当玩家装【本作之外的自定义机器】时，`STANDARD_MACHINE_TAG` 补判据能免去手配名单。
+      但需配排除表（冰箱/充能器等储物型机器），且若该机器的内库 parent 链取不到物品则同样失效。
+      ⇒ 优先级 P3，等有实际需求再加。
+
+  pending_real_verification:
+    - "熔炉/解序器：Ctrl+点击快移 与 Ctrl+拖动整堆 —— 期望日志变为 `机器判据=True`、`marker.numTransfer=1`，"
+    - "且表现变为：整堆被逐格铺开（每格 1 件），余量留在源容器；机器内不再出现 unitCount>1。"
+    - "顺带复测 §七 TC1/TC2/TC3/TC-BP（DiagLog 关掉跑一遍，确认无异常日志）。"
+
+  side_finding:
+    title: "副产物：状态比较耗时实测 56.94 µs（超过 L1 计划阈值 50 µs）"
+    caveat: |
+      ★ 该数值是在 DiagLog=true 下测得的，而 DiagLog 开时【判不等】路径会额外执行 DiagStateDiff，
+      故测量值偏高、不能直接与 50 µs 阈值比。要下结论需在 DiagLog=false 下重测
+      （但 DiagLog 关时 ReportStateCmpTiming 本身也被门控 —— 需临时改成"只测不打日志"才可测）。
+    action: "暂不动（沿用 L1 计划：先有可信数据再决定是否加缓存）。"
+
+
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 十三、第二轮实机反馈（2026-10-13 00:37）与两项定稿改动
+# ══════════════════════════════════════════════════════════════════════
+second_round_feedback:
+  user_report:
+    - id: "FB-1"
+      text: "Ctrl+左键点击快移彻底不能快移到机器里，哪怕物品数量为 1 也被拒绝"
+      log_evidence: |
+        [Ctrl 快移·拦截] 合并候选被判定为「机器容器内不允许堆叠」→ 拒绝本次合并（物品留在源处）：
+        源 scrap_metal ×1 → 目标堆 scrap_metal ×1
+    - id: "FB-2"
+      text: "Alt+左键点击的目标窗口判定没改；要求改为和 Ctrl 一样的逻辑判定"
+      clarification: |
+        用户明确澄清：关键点**不在鼠标所在窗口**，而是把「主仓库 ↔ 柜台」的双向配对机制
+        改成 Ctrl 那套逻辑（目标由游戏自己判定）。
+
+  # ── FB-1 根因 ──
+  fb1_root_cause: |
+    §十二的修复（owner: 短路）生效后，机器 Deny 第一次真正开始工作 —— 于是暴露了下一层问题：
+      · 机器里**已有**同种物品时，原生给 Ctrl 快移选的落点是「那个已有堆的格子」（合并候选）；
+      · 本挂在 `SlotMarker.TryAcceptOnce` 的闸门按「机器容器内不允许堆叠」**返 0 硬拒**；
+      · 而 `GraphUtils.TryAcceptOnce` 是**单次调用**（不像拖放有 EndDrag 的 ×≤40 循环兜底），
+        硬拒 = 整条快移失败 ⇒ 连 ×1 都进不去机器。
+    ⇒ 结论：问题不是"不该拦"，而是**只拦不导**。拖放路径靠 `MayStack → false` 让原生自己找空槽，
+       快移路径没有这个二次搜索，必须由本 mod 补上。
+
+  # ── FB-1 修法：改投空槽（复刻原生 InsertToActiveContainer 的语义）──
+  fb1_fix:
+    file: "StackPatches.Merge.cs（Patch_SlotMarkerTryAcceptOnce 阶段1）"
+    mechanism: |
+      反汇编依据（`GraphUtils::InsertToActiveContainer` 0x766020）：
+          mov esi, [rbp+0x1f8]        ; esi = item.unitCount
+          xor ebx, ebx                ; i = 0
+        loop: cmp ebx, esi / jge 退出 ; while (i < unitCount)
+          mov ecx, 4                  ; 接口 slot 4 = TryFindOneValidInventorySlot
+          call 0x180003fa0            ; ★ 每件都重新找一个槽
+      ⇒ 原生自己就是「逐件循环 + 每件重新找槽」，而"找槽"会经 MayStack ⇒ 机器 Deny 让它只拿空槽。
+        本 mod 的 TryFillEmptySlots 即照抄这个语义。
+    behavior: |
+      机器容器内 + 合并候选被 Deny 时：
+        ① 循环调 `grid.TryFindOneValidInventorySlot(source)` 找槽，只投 targetItem==null 的空槽；
+        ② 每件只投 1（`m.TryAcceptOnce(1)`），再由 MaxNumAdd 钳 1 双保险 ⇒ 每格 1 件；
+        ③ 槽位指针去重（HashSet<long>）：见过即终止 —— 防止 finder 反复返回同一槽导致死循环，
+           也避免"见到已占用就 break"造成一次点击只填 1 格的可用性退化；
+        ④ moved>0 ⇒ __result=moved 并跳过原生；moved==0 ⇒ 退回返 0 硬拒（物品留源，不丢件）。
+    fail_safe: "任何异常 → 退回硬拒；物品留在源容器。不存在丢件路径。"
+
+  # ── FB-2 修法：Alt 转发给 Ctrl 的原生 OnEventRelease ──
+  fb2_fix:
+    decision: "AltPairMode 新增第三个值 'ctrl'，并由用户定稿为该语义（代码默认 + cfg 已同步改）。"
+    file: "ModifierPairTransfer.cs（TryRelayItemToCtrl / Patch_PairReleaseAlt / Alt1）"
+    mechanism: |
+      不再自造落点（旧：主仓库↔柜台固定配对），而是**借状态给 Ctrl handler 并调用它自己的方法**：
+          ctrl.currentItem      = item;
+          ctrl.isQuickTransfer  = true;
+          ctrl.OnEventRelease(keys);      // ★ keys 必须传
+      ⇒ raycast → TreeNodeRender::FindParentWindow → 活动容器 → 落点搜索，全部由游戏原生完成。
+    why_keys_is_mandatory:
+      evidence: |
+        反汇编 `ItemQuickTransferHandler::OnEventRelease` 0x7E2090：
+            mov rbx, rdx            ; rdx = keysReleased 形参
+            test rbx, rbx / je 退出  ; ★ null ⇒ 什么都不做（静默空转）
+            ... call 0x180009830     ; keysReleased.Contains(this.key@0x20)
+            test al,al / je 退出     ; ★ 不含主键 ⇒ 退出
+        文档 §5.2 亦记：① isQuickTransfer==1 且匹配 key，否则返回。
+      conclusion: "不传集合 = 编译不过；传 null / 空集合 = 运行期静默空转（物品不动、无日志）。"
+      how_obtained: |
+        用 Harmony 的 `object[] __args` 取参，而非按名注入 —— 两个 Alt 变体的形参名不一致
+        （dump.cs 中一个叫 keysReleased、一个叫 keysPressed），按名注入会在其中一个上抛
+        「找不到参数」。`__args[0]` 与名字无关，天然鲁棒。
+    retained_by_mod:
+      - "数量可配：转发前把源堆预裁到 AltQuickTransferAmount（默认 1），余量归还源容器（不丢件）"
+      - "安全性：被转发的这次调用同样进 Ctrl 作用域 ⇒ 机器容器自动改投空槽（FB-1 的修复对 Alt 同样生效）"
+    anti_recursion: "_relayDepth>0 时 DispatchPairRelease 不再接管，防 Alt/Ctrl 互相转发；Ctrl 闸门照常工作。"
+
+  cfg_change_applied:
+    file: "UserData/MelonPreferences.cfg"
+    entry: 'AltPairMode = "ctrl"   （原为 "counter_inv"）'
+    why_manual: |
+      MelonPreferences **不会**用代码默认值覆盖已存在的 cfg 项 —— 只改代码默认值对已有存档无效。
+      故同步改了实际 cfg（已备份 MelonPreferences.cfg.bak-20261013-005657）。
+    rollback: "改回 counter_inv / native 即可，或关总闸 ModifierKeysEnabled。"
+
+  regression_guard_added:
+    file: "_tests/ItemStacking.Tests/ContainerTokenMatchTests.cs"
+    test: "AltRelay_MustForwardKeysReleased"
+    asserts:
+      - "源码必须出现 OnEventRelease(keys)（禁止退回无参调用）"
+      - "keys 必须来自 __args[0]（与形参名无关）"
+      - "取不到集合时必须显式告警（日志 key relay-keys），不留静默空转"
+    total_tests: 40
+
+  verification_for_user:
+    - "启动日志应出现：★ Alt 快移（§四）= 模式「ctrl」（★ 与 Ctrl+点击同一条逻辑…）"
+    - "Ctrl+点击 一叠 scrap_metal 进已有同种物品的熔炉：日志应由 [Ctrl 快移·拦截] 变为 [Ctrl 快移·机器改投空槽] … 放入空槽 ×N"
+    - "表现：每次点击填入机器的空槽，每格 1 件；机器内不再出现 unitCount>1"
+    - "Alt+点击：应与 Ctrl+点击落到同一个容器（目标由游戏判定），且一次只搬 AltQuickTransferAmount 件（默认 1）"
+    - "若出现 [Alt→Ctrl 转发] 取不到本次 keysReleased 告警 ⇒ 说明 __args 取参失败，请把该行发我"

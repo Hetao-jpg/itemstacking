@@ -63,6 +63,12 @@
       <HintPath>$(MLIl2Cpp)\Il2Cppmscorlib.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <!-- ★ 2026-10-13：Alt→Ctrl 转发需要构造/传递 `ISet<KeyCode>`（OnEventRelease 的形参）——
+         该类型定义在 Il2CppSystem 程序集里（dump.cs: InputActionManager.tempKeysReleased）。 -->
+    <Reference Include="Il2CppSystem">
+      <HintPath>$(MLIl2Cpp)\Il2CppSystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(MLIl2Cpp)\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>

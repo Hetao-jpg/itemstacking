@@ -157,6 +157,35 @@ public partial class Main
             {
                 if (slot == null) return;   // 无参转发路径（slot 未构造）不动
 
+                // ★ 机器容器（方案 v2 §三 第2层）：空位或已有堆都只放 1 件。
+                //   两层互补（§二 layer_necessity）：MergePolicy 的机器容器 Deny 只阻止
+                //   「合并到已有堆」；若此处不钳制，空位分支会走 StackCap 一次放多件
+                //   → 违反「每格 1 件」。本层负责「每格 1 件」，Deny 层负责「不合并」。
+                //   ★ 钳 1 而非 0：返回 0 ⇒ TryAcceptOnce 每次搬 0 件 ⇒ 机器永远收不到物品。
+                //   ★ 总闸：StackEnabled=false 时交还原生（与 MergePolicy 阶段 0 一致，
+                //     避免「Deny 已关、钳制仍在」的半开状态）。
+                //   ★ 早返回：不改动下方普通容器逻辑（普通容器行为逐字节不变）。
+                if (StackEnabled)
+                {
+                    bool machine = IsMachineContainer(slot.inventory);
+                    // ★ P2 修复（2026-10-13）：判据异常（故障位）时也按机器容器处理（保守钳 1）。
+                    //   IsMachineContainer 异常 → 置 FaultProtection + 返回 false；若只信 false，
+                    //   本行会 fail-open：下方空槽分支把 numTransfer 抬到 StackCap ⇒ 一次放多件
+                    //   进机器格（机器假设「一槽一实例」，正是本功能要防的）。MergePolicy 那层对
+                    //   同一故障位有兜底，容量层原先没有 —— 这里补齐，两层语义一致。
+                    if (!machine && ConsumeJudgeFault(FaultProtection)) machine = true;
+                    if (machine)
+                    {
+                        if (__result != 1)
+                        {
+                            LogOnce("machine.add." + SafeId(__instance), Level.Diag,
+                                $"机器容器内 MaxNumAdd 钳到 1：{SafeId(__instance)}（原 {__result}）", max: 3);
+                            __result = 1;
+                        }
+                        return;
+                    }
+                }
+
                 int before = __result;
                 var target = slot.targetItem;
                 if (target != null)

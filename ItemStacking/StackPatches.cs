@@ -60,6 +60,12 @@ public partial class Main
         // 3.4 #3：IsContainer 依赖 FindAllChildItems —— 若游戏改名此方法，容器防护会「静默失效」
         // （比补丁失效更危险：不报错却允许合并容器，导致内部物品丢失）。此处一并纳入自检。
         Check(typeof(GameItem), "FindAllChildItems", Type.EmptyTypes, "FindAllChildItems(容器检测)");
+        // ★ 2026-10-13：容器归属判据依赖 parentInventory（拖放/快移都从它取「权威容器」）与
+        //   GameInventory.GetParentItem（owner: token 的所属物品链匹配）。二者任一被改名，
+        //   容器白/黑名单与【机器容器判据】都会静默失效（IsMachineContainer 恒返回 false
+        //   → 机器不再拦截、堆叠又会在机器里发生）。此前只查了 FindAllChildItems，纳入补齐。
+        Check(typeof(GameItem), "get_parentInventory", Type.EmptyTypes, "GameItem.parentInventory(容器归属判据)");
+        Check(typeof(GameInventory), nameof(GameInventory.GetParentItem), Type.EmptyTypes, "GameInventory.GetParentItem(owner 匹配链)");
         // 0.5.0：黑名单依赖 IsTag —— 若游戏改名此方法，黑名单整体静默失效（鉴定/赃物/所有权
         // 防护全丢，退回放任堆叠）。纳入自检。
         Check(typeof(GameItem), nameof(GameItem.IsTag), new[] { typeof(string) }, "IsTag(黑名单判据)");
@@ -232,7 +238,7 @@ public partial class Main
     //    · `DirectoryMaster.GetIdentifierList<T>(string)` 需要泛型类型参数，IL2CPP 互操作下
     //      反射构造泛型调用既脆弱又可能触发 JIT 链（本项目 0x80131506 铁律），不值得为"启动告警"冒这个险；
     //    · 而目录 JSON 是纯文本，读取零副作用、失败就跳过，安全侧。
-    //  ★ 只核对「精确 id 名单」（BlockItemIds / SuffixExempt）——
+    //  ★ 只核对「精确 id 名单」（BlockItemIds / SuffixExempt / 机器容器的 owner: 后半段）——
     //    前缀/子串/后缀是特征匹配，本就不该也不可能逐个对存在性。
     private static void CheckBlacklistIdsExist()
     {
@@ -288,6 +294,34 @@ public partial class Main
                         "（多为目录文件不全/旧版所致，不代表物品不存在、不影响拦截；" +
                         "如需精确核对，请更新 Mods\\item_catalog.json）:\n  - " +
                         string.Join("\n  - ", missing));
+            }
+
+            // ★ 机器容器名单（machineContainers，方案 v2 R6）：owner: 后半段 / 裸 id 同样核对。
+            //   游戏改名机器 id ⇒ 该 token 静默失效（机器不再拦截），这是本方案最需要防的一类故障。
+            //   slot: 槽位 token 与物品目录无对应关系，跳过。
+            var missingMachine = new List<string>();
+            if (MachineContainerTokens != null)
+            {
+                foreach (var tok in MachineContainerTokens)
+                {
+                    if (string.IsNullOrWhiteSpace(tok)) continue;
+                    var t = tok.Trim();
+                    if (t.StartsWith(Constants.TokenSlotPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+                    var id = t;
+                    if (id.StartsWith(Constants.TokenOwnerPrefix, StringComparison.OrdinalIgnoreCase))
+                        id = id.Substring(Constants.TokenOwnerPrefix.Length).Trim();
+                    if (id.Length == 0) continue;
+                    if (!known.Contains(id)) missingMachine.Add(t);
+                }
+            }
+            if (missingMachine.Count > 0)
+            {
+                // ★ 2026-10-13：升为 Warning —— 机器 token 查不到意味着【对应机器的堆叠拦截静默失效】
+                //   （机器内又会出现堆叠 → 丢件/崩坏），属数据保护级别，不能只在 Diag 里可见。
+                //   仍如实说明「目录文件不全」也可能导致此告警。
+                Log.Warning($"[名单自检] 机器容器名单有 {missingMachine.Count} 项 token 在目录文件里查不到" +
+                        "（目录不全，或游戏已改名——对应机器的堆叠拦截将静默失效，请用最新目录核对后再决定是否调整名单）:\n  - " +
+                        string.Join("\n  - ", missingMachine));
             }
         }
         catch (Exception e)
