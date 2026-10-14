@@ -38,29 +38,58 @@ public partial class Main
     // ── 共用：余量归还 ──
     //   remainder = 从原品拆出的多余部分（已不在任何容器中）。
     //   sourceInv = 拆堆前记录的源容器（可能是 null —— 拖拽中物品已脱离容器）。
+    //
+    // ★★ 2026-10-14（P0-3）修正：`GraphUtils.TryAcceptAllMid` 返回的是
+    //   【剩余未接受量】，不是「已接受量」——旧代码把它当「已接受量」用，判据整个反了。
+    //
+    //   ── 反汇编实证（GameAssembly，ImageBase=0x180000000）──
+    //     `GraphUtils::TryAcceptAllMid` @ RVA 0x7664B0：
+    //       0x1807664c0  mov  edi, r8d          ; edi = amount（<0 时取 item.unitCount）
+    //       0x1807664eb  xor  ebx, ebx          ; ebx = accepted = 0
+    //     循环（≤0x28 轮，与 TryAcceptAll 同构）：
+    //       0x18076651f  call SlotMarker::TryAcceptOnce(marker, amount-accepted, 0)
+    //       0x180766528  add  ebx, eax          ; accepted += n
+    //       0x180766536  sub  edi, ebx          ; ★ edi = amount - accepted
+    //       0x18076653d  mov  eax, edi          ; ★ 返回值 = 剩余未接受量
+    //     ⇒ 与同族的 `TryAcceptAll`(0x766650)（《物品堆叠机制.md》§8 标注「int 剩余未接受量」）语义一致。
+    //
+    //   ── 为什么旧判据「accepted >= remainder.unitCount」恒为真（两个语义前提）──
+    //     ① 「整批接受」走 SlotMarker 的 Expel 分支（0x7B0020 → 虚表[0x278]），把物品对象
+    //        【整体】搬进容器 ⇒ unitCount 不变（= N），此时返回 0  ⇒ 0 >= N 为假；
+    //     ② 「部分接受」走 GetSplitItem 分支 ⇒ 源对象 unitCount 减少为 N-A，
+    //        此时返回 N-A ⇒ (N-A) >= (N-A) 为真。
+    //     ⇒ 后果：① 的「已归还源容器」成功分支【不可达】、日志永不打印；
+    //             部分成功时误判「全归还」提前 return ⇒ ② 背包兜底与 ③ 丢失告警全被跳过。
+    //
+    //   ⇒ 正确判据只有一条：**返回 ≤ 0 = 全部搬完**；> 0 则剩余件仍留在
+    //     `remainder` 自身（无容器孤儿，unitCount 已同步为剩余量），直接进下一级兜底。
     private static void ReturnRemainder(GameItem remainder, GameInventory sourceInv)
     {
         if (remainder == null) return;
+        int total = remainder.unitCount;   // ★ 原始件数：全归还时 unitCount 不变(Expel)或归 0，日志要用它
+        if (total <= 0) return;
         try
         {
             // ① 优先塞回源容器
+            //   ★★ 2026-10-14（P0 级，实机日志证实）：旧写法 `sourceInv as GameGridInventory`
+            //   对【机器内库】恒为 null —— 熔炉/解序器等的内库是裸 `GameInventory`：
+            //     日志《Latest.log》16:23:48 作用域探针：
+            //       `1 号容器：id=<空id> 类=GameInventory @… 所属=furnace 内含=common_ore`
+            //   ⇒ 旧代码 ① 整段被跳过，余量只能走 ② 背包；背包也满时就彻底没地方去。
+            //   ⇒ 改用与类型无关的 TryReturnIntoInventory（基类 GameInventory，
+            //     试 GameGridInventory / GameSlotInventory / 裸 GameInventory 通吃）。
             if (sourceInv != null)
             {
                 try
                 {
-                    var grid = sourceInv as GameGridInventory;
-                    if (grid != null)
+                    int moved = TryReturnIntoInventory(sourceInv, remainder);
+                    if (IsPlacedInContainer(remainder))
                     {
-                        int accepted = GraphUtils.TryAcceptAllMid(grid, remainder);
-                        if (accepted >= remainder.unitCount)
-                        {
-                            Diag($"[销毁修复] 余量已归还源容器：{SafeId(remainder)} ×{remainder.unitCount}");
-                            return;
-                        }
-                        int leftover = remainder.unitCount - accepted;
-                        if (leftover > 0 && accepted > 0)
-                            remainder = remainder.GetSplitItem(leftover) ?? remainder;
+                        Diag($"[销毁修复] 余量已归还源容器：{SafeId(remainder)} ×{total}");
+                        return;
                     }
+                    if (moved > 0)
+                        Diag($"[销毁修复] 源容器只收下 {moved}/{total} 件，余 {remainder.unitCount} 件改投背包");
                 }
                 catch (Exception e)
                 {
@@ -75,13 +104,12 @@ public partial class Main
             {
                 try
                 {
-                    int accepted = GraphUtils.TryAcceptAllMid(backpack, remainder);
-                    if (accepted >= remainder.unitCount)
+                    TryReturnIntoInventory(backpack, remainder);
+                    if (IsPlacedInContainer(remainder))
                     {
-                        Diag($"[销毁修复] 余量已归还背包：{SafeId(remainder)} ×{remainder.unitCount}");
+                        Diag($"[销毁修复] 余量已归还背包：{SafeId(remainder)} ×{total}");
                         return;
                     }
-                    remainder = remainder.GetSplitItem(remainder.unitCount - accepted) ?? remainder;
                 }
                 catch (Exception e)
                 {
@@ -98,6 +126,63 @@ public partial class Main
             if (e is OutOfMemoryException || e is StackOverflowException) throw;
             LogOnce("remainder-ex", Level.Warn, $"[销毁修复] 归还余量异常: {e.Message}");
         }
+    }
+
+    // ── 共用：把「孤儿物品」逐格塞进【任意】GameInventory ──
+    //   ★ 2026-10-14 新增。语义与原生 `GraphUtils.TryAcceptAll` 同构（找槽 → TryAcceptOnce，≤64 轮），
+    //     但两点不同：
+    //       ① 不要求目标是 GameGridInventory —— 机器内库是裸 `GameInventory`
+    //          （实机日志：`类=GameInventory … 所属=furnace`），旧用 `TryAcceptAllMid`
+    //          必须强转 GameGridInventory，故对机器恒失败；
+    //       ② 返回值**只用于日志**：判断「是否全部归位」一律看 `item.parentInventory`
+    //          （见 IsPlacedInContainer），绝不依赖任何 GraphUtils 返回值语义
+    //          —— 那正是 P0-3 踩过的坑（TryAcceptAllMid 返回的是「剩余量」）。
+    //   ★ 重入：内部自调用 TryAcceptOnce，靠 `_selfAcceptDepth` 让本 mod 的
+    //     SlotMarker.TryAcceptOnce 补丁直通原生（否则会被「机器容器每格 1 件」那层再拦一次）。
+    private static int TryReturnIntoInventory(GameInventory inv, GameItem item)
+    {
+        if (inv == null || item == null) return 0;
+        int moved = 0, guard = 0, consecutiveOccupied = 0;
+        _selfAcceptDepth++;
+        try
+        {
+            while (item.unitCount > 0 && guard++ < 64)
+            {
+                SlotMarker m;
+                try { m = inv.TryFindOneValidInventorySlot(item); } catch { break; }
+                if (m == null) break;
+                if (m.targetItem != null || m.numTransfer < 1)
+                {
+                    // 该槽已占用 / 放不进 → 试下一个；连续 8 次 ⇒ 判定没有空槽了
+                    if (++consecutiveOccupied >= 8) break;
+                    continue;
+                }
+                consecutiveOccupied = 0;
+
+                m.item = item;                       // 原生 GetStackSlot 同款：finder 未必回填 item
+                int n;
+                try { n = m.TryAcceptOnce(-1); } catch { break; }
+                if (n <= 0) break;
+                moved += n;
+
+                // 整个对象被搬走（原生 Expel 分支）时 unitCount【不变】、但已挂上归属容器 ⇒ 收工。
+                if (IsPlacedInContainer(item)) break;
+            }
+        }
+        finally
+        {
+            _selfAcceptDepth--;
+        }
+        return moved;
+    }
+
+    // 物品是否「已经在某个容器里」= 全部归位。
+    //   依据（0x7B0020 反汇编）：整件接受走 Expel 分支 ⇒ unitCount 不变但 parentInventory 被挂上；
+    //   部分接受走 GetSplitItem ⇒ 源对象 unitCount 减少、parentInventory 仍为 null（孤儿）。
+    private static bool IsPlacedInContainer(GameItem item)
+    {
+        try { return item != null && item.parentInventory != null; }
+        catch { return false; }
     }
 
     // ── 共用：销毁前拆堆（Prefix 主体）／销毁后归还余量（Postfix 主体）──
@@ -334,11 +419,15 @@ public partial class Main
                     // ★ interop 实测 GameGridInventory 未实现 GraphNodeStorage 接口
                     //   （CS0029），GraphUtils.TryAcceptAll(dest, …) 编译不过 ——
                     //   改用同族的 TryAcceptAllMid(GameGridInventory, …)（0.9.6
-                    //   归还余量同款，逐格填充整堆），返回值 = 本轮实际移走件数。
-                    int before = item.unitCount;
-                    int moved = GraphUtils.TryAcceptAllMid(dest, item, -1);
+                    //   归还余量同款，逐格填充整堆）。
+                    // ★★ 2026-10-14（P0-3）修正：它的返回值是【剩余未接受量】
+                    //   （反汇编 0x7664B0 尾部 `sub edi,ebx / mov eax,edi`，见 ReturnRemainder 的取证注释），
+                    //   旧写法 `before - moved` 把它当「已接受量」⇒ 整堆搬走时算成「一件没搬」：
+                    //     · 会继续拿同一物品往 dest 链下一级搬（口袋物品落到主仓库而不是玩家柜台）；
+                    //     · 最后打一条假的「目的地已满，留在口袋」；
+                    //     · 且不再执行 SetSlotCurrent(pocket, null) 清槽。
+                    remaining = GraphUtils.TryAcceptAllMid(dest, item, -1);
                     anySuccess = true;
-                    remaining = before - moved;
                 }
                 catch (Exception e)
                 {

@@ -157,11 +157,9 @@ public partial class Main
             {
                 if (slot == null) return;   // 无参转发路径（slot 未构造）不动
 
-                // ★ 机器容器（方案 v2 §三 第2层）：空位或已有堆都只放 1 件。
-                //   两层互补（§二 layer_necessity）：MergePolicy 的机器容器 Deny 只阻止
-                //   「合并到已有堆」；若此处不钳制，空位分支会走 StackCap 一次放多件
-                //   → 违反「每格 1 件」。本层负责「每格 1 件」，Deny 层负责「不合并」。
-                //   ★ 钳 1 而非 0：返回 0 ⇒ TryAcceptOnce 每次搬 0 件 ⇒ 机器永远收不到物品。
+                // ★ 机器容器（方案 v2 §三 第2层）：机器内每格只放 1 件。
+                //   两层互补（§二 layer_necessity）：MergePolicy 的机器容器 Deny 负责「不合并」；
+                //   本层负责「每格 1 件」（不许把空槽容量抬到 StackCap）。
                 //   ★ 总闸：StackEnabled=false 时交还原生（与 MergePolicy 阶段 0 一致，
                 //     避免「Deny 已关、钳制仍在」的半开状态）。
                 //   ★ 早返回：不改动下方普通容器逻辑（普通容器行为逐字节不变）。
@@ -176,10 +174,33 @@ public partial class Main
                     if (!machine && ConsumeJudgeFault(FaultProtection)) machine = true;
                     if (machine)
                     {
-                        if (__result != 1)
+                        // ══════════════════════════════════════════════════════════════
+                        // ★★ 2026-10-14 关键修正：从「无条件钳到 1」改为「★ 只降不升」。
+                        //
+                        //  ── 旧写法的致命副作用（用户实机日志 16:46:11 反向定位）──
+                        //   旧代码 `if (__result != 1) { __result = 1; }` 把一切非 1 值改写成 1。
+                        //   日志：`机器容器内 MaxNumAdd 钳到 1：common_ore（原 0）`
+                        //   ⇒ 原生给【合并候选】（机器里那件同名堆 unitCount=1）算出的
+                        //     0 = `cap(1) − targetItem.unitCount(1)`，语义 = 【这一格放不进更多】；
+                        //     被我们改成 1 之后，这个「已占用槽」在【找槽器】眼里又成了合法落点
+                        //     ⇒ finder 反复返回同一个已占用槽 ⇒ TryFillEmptySlots 连续 8 次判定
+                        //     "占用"后放弃 ⇒ 最终「拒绝放置」
+                        //     ⇒ 正是用户反馈的「机器里有同名物品时，什么都放不进去了」。
+                        //
+                        //  ── 正确语义：只降不升 ──
+                        //    · 原生 0（已占用槽 / 该物品 cap 已满）→ **保持 0**。
+                        //      这 0 正是游戏自己的「寻路」所依赖的信号：finder 会丢弃该候选、
+                        //      转去扫描机器内的空槽（依据 0x798160 尾段 `ebx -= targetItem.unitCount`）。
+                        //    · 原生 > 1（下方 StackCap 提升，或 slot[0x18]==null 的
+                        //      0x7FFFFFFF 早退分支）→ 压到 1：机器每格只放 1 件。
+                        //    · 原生 1（空槽常态）→ 不动。
+                        //   ★ 本层从此【不再提升】任何值 —— 提升只会让机器里出现 unitCount>1。
+                        // ══════════════════════════════════════════════════════════════
+                        if (__result > 1)
                         {
                             LogOnce("machine.add." + SafeId(__instance), Level.Diag,
-                                $"机器容器内 MaxNumAdd 钳到 1：{SafeId(__instance)}（原 {__result}）", max: 3);
+                                $"机器容器内 MaxNumAdd 压到 1：{SafeId(__instance)}（原 {__result}）" +
+                                (slot.targetItem != null ? $"，目标堆 {SafeId(slot.targetItem)}" : "，空槽"), max: 3);
                             __result = 1;
                         }
                         return;
@@ -216,6 +237,34 @@ public partial class Main
                     if (want > __result) __result = want;
                     LogOnce("maxnumadd.empty." + SafeId(__instance), Level.Diag,
                         $"MaxNumAdd {__instance.identifier} -> 空槽：{before} -> {__result}（unitCount={__instance.unitCount}，StackCap={StackCap}）", max: 3);
+                }
+
+                // ══════════════════════════════════════════════════════════════
+                // ★ P0-2（2026-10-14）：硬上限探针 + 可选收紧（cfg StrictStackCap）
+                //
+                //   背景：上面两段一律「只提升、不收紧」（刻意保留游戏原有全部约束）。
+                //   但原生 MaxNumAdd 有两条会给出【超大值】的路径：
+                //     ① 早退分支 slot[0x18]==null → return 0x7FFFFFFF
+                //        （反汇编 0x1807983fd `mov eax, 0x7fffffff`）；
+                //     ② 四处 maxSlotAmountItemFunc（0x38 组 / 0x28 组各两处：this 与目标槽）
+                //        任一被外部 mod 注入大值 —— InvokeAllReduce 只取 Min，注入值会直接抬高结果。
+                //   ⇒ 这类值会被「只提升」逻辑原样放行 ⇒ StackCap 失效。
+                //
+                //   处理：探针常驻（只读、DiagLog 门控 + 按物品限流 max 3）；
+                //         收紧本体由 cfg「StrictStackCap」控制（默认 false = 行为与改动前一致）。
+                //   ★ 下限恒保 1：返 0 会让 GraphUtils.TryAcceptAll 的 `n == 0 → break`
+                //     当场打断逐格填充循环（表现为「既不合并、也不再自动找空位」），
+                //     见 StackPatches.Merge.cs 头部 0.10.1 的整段注释。
+                // ══════════════════════════════════════════════════════════════
+                int hardCap = (target != null) ? (StackCap - target.unitCount) : StackCap;
+                if (hardCap < 1) hardCap = 1;
+                if (before > hardCap)
+                {
+                    LogOnce("maxnumadd.clamp." + SafeId(__instance), Level.Diag,
+                        $"MaxNumAdd 超出硬上限：{SafeId(__instance)} 原生={before} → 硬上限={hardCap}" +
+                        $"（StackCap={StackCap}，目标堆={(target != null ? target.unitCount.ToString() : "空槽")}）" +
+                        (StrictStackCap ? "，已收紧" : "，未收紧（StrictStackCap=false）"), max: 3);
+                    if (StrictStackCap) __result = hardCap;
                 }
             }
             catch (Exception e)

@@ -29,8 +29,6 @@ public partial class Main
     //
     //  ── 固定判定顺序（定稿，三种路径共用）──
 //    0. 总闸 StackEnabled == false            → Allow（完全交还原生）
-//    1. 柜台：★ 0.11.0 起已移交 MergeSteerer 作【导流】（返回 false 让原生找空格），
-//       不再由 Evaluate 拦截 —— 见本文件「阶段3」说明与 Evaluate 内注释。
 //    1.5 机器容器 IsMachineContainer(slotInventory) → Deny（数据保护；方案 v2，
 //       代码段标签 0.5，实居容器判据之前——机器禁并优先于「含物品容器」判据）
 //    2. 容器 IsContainer(target|source)        → Deny
@@ -46,8 +44,8 @@ public partial class Main
     //    · 3 在 4/5 前：物品自身的独立内容（node*/module/*_keycard/文书…）优先于容器归属；
     //      GetBlacklistReason 现只做按 id 拦截（类判据已停用），属物品级语义，先行。
     //    · 4 在 5 前：容器黑名单赢（维持 0.9.3 用户拍板「双名单命中黑名单赢」）。
-    //    · 柜台（原步骤 1）已移交 MergeSteerer（导流），不参与本处拦截定序。
     //    · 6 在最末：只在其余全通过、还差同名判定时才需要。
+    //    ★ 2026-10-14：原步骤 1「柜台」已随柜台禁堆功能删除。
     // ══════════════════════════════════════════════════════════════════════
 
     internal enum MergeVerdict { Allow, Deny, Unknown }
@@ -76,7 +74,8 @@ public partial class Main
     //   ★ 阶段2：逐判据调用，每个判据后立即查其【故障位】，按保护级别分级落点：
     //     数据保护组（容器/物品类判据）故障 → Deny（宁可拦不可丢）；
     //     便利组（容器黑白名单）故障 → Allow（不影响游玩）。
-    //   ★ 阶段3：柜台判据已移交 MergeSteerer（导流职责），本决策不再判柜台。
+    //   ★ 2026-10-14：原「柜台判据已移交 MergeSteerer（导流）」一段随柜台禁堆功能删除；
+    //     柜台现与普通容器同规则，本决策亦不再有任何柜台专属分支。
     //   ★ 判据顺序：容器 → 物品判据 → 容器黑名单 → 容器白名单 → 空id。
     //   故障位由判据函数在 catch 里置位（见 StackGates.cs 的 MarkJudgeFault）。
     internal static MergeVerdict Evaluate(in MergeContext ctx, out string reason)
@@ -94,11 +93,8 @@ public partial class Main
             ConsumeJudgeFault(FaultProtection);
             ConsumeJudgeFault(FaultConvenience);
 
-            // ★ 阶段3：柜台判据已移交 MergeSteerer（属【导流】职责，不是拦截）——
-            //   理由：柜台禁堆的语义是"不合并"，实现手段是"让原生找空格"（导流）；
-            //   若在此处 Deny，会让 TryAcceptOnce 返回 0 → 触发上层 TryAcceptAll 的 break →
-            //   跨场景转移只搬极少件（0.9.9 踩过的坑，见 StackPatches.cs 柜台注释）。
-            //   ⇒ 柜台「不合并」由 MayStack 层的 Steerer 提前导流实现，本决策不再管柜台。
+            // ★ 2026-10-14：原「柜台判据已移交 MergeSteerer（导流）」一段随柜台禁堆功能删除 ——
+            //   柜台不再特殊，和普通容器走完全相同的判据链。
 
             // ── 0.5) ★ 机器容器：禁止合并（数据保护）──（方案 v2 §二 deny_vs_steer / §三 第1层）
             //   背景：原版机器逻辑假设 unitCount == 1（熔炉消耗/解序完成/打印升级等），

@@ -134,6 +134,11 @@ public partial class Main
             if (item == null || item.unitCount <= 1) return;      // 只看"本来该搬多件"的
             if (result.numTransfer != 1) return;                  // 只看"只给 1 件"的
 
+            // ★ 2026-10-14：机器容器的空槽【本来就应该】只给 1 件（每格 1 件），
+            //   那不是「只搬 1 件」缺陷 —— 跳过它，否则本探针会在机器场景里持续刷噪声，
+            //   把真正要找的「跨场景转移只搬 1 件」信号淹没（用户实机日志已出现该噪声行）。
+            try { if (IsMachineContainer(result.inventory)) return; } catch { }
+
             string invId;
             try { invId = SafeId(result.inventory); } catch { invId = "?"; }
             LogOnce("nonalt." + Ptr(result.inventory).ToString("X") + "|" + SafeId(item), Level.Diag,

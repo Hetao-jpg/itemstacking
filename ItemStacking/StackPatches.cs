@@ -194,18 +194,18 @@ public partial class Main
 
         // ── 0.6.5：合并闸门的真实挂点 ──
         // 这是【所有合并路径】的公共瓶颈（拖放 / Alt 快移 / Ctrl 快移全部经此）。
-        // 若游戏改掉这个方法签名或删掉它，柜台禁堆/作用域/黑名单对快移路径会静默失效。
+        // 若游戏改掉这个方法签名或删掉它，机器容器禁并 / 作用域 / 黑名单对快移路径会静默失效。
         Check(typeof(SlotMarker), nameof(SlotMarker.TryAcceptOnce), new[] { typeof(int) },
               "SlotMarker.TryAcceptOnce(合并闸门·全路径)");
-        // 柜台判据依赖 EmporiumEntry 的三个柜台格实例（0.6.6 修正：front / back / counter）。
-        //   反汇编证实「柜台」= frontInvinvElement(0x88) + backInvinvElement(0x98)（GetCountersItems），
-        //   backInvinvElementCounter(0xA0) 为第三个柜台格。任一 getter 缺失即视为柜台判据可能失效。
+        // ★ 2026-10-14：柜台禁堆已删除，但下面三个 EmporiumEntry 柜台格 getter 仍在用 ——
+        //   ContainerWhitelist / ContainerBlacklist 的 `slot:` token 匹配靠它们（MatchEmporiumSlot）。
+        //   任一 getter 缺失 ⇒ `slot:` 类 token 静默失配（白名单可能整体失效）。
         Check(typeof(EmporiumEntry), "get_frontInvinvElement", Type.EmptyTypes,
-              "EmporiumEntry.frontInvinvElement(柜台正面格)");
+              "EmporiumEntry.frontInvinvElement(柜台前格·slot: token 匹配)");
         Check(typeof(EmporiumEntry), "get_backInvinvElement", Type.EmptyTypes,
-              "EmporiumEntry.backInvinvElement(柜台背面格)");
+              "EmporiumEntry.backInvinvElement(玩家柜台·slot: token 匹配)");
         Check(typeof(EmporiumEntry), "get_backInvinvElementCounter", Type.EmptyTypes,
-              "EmporiumEntry.backInvinvElementCounter(柜台第三格)");
+              "EmporiumEntry.backInvinvElementCounter(柜台第三格·slot: token 匹配)");
 
         // ── 0.9.0：整堆计价的挂点 ──
         // GameItem.GetNegociatedValue() 是交易系统的【唯一计价入口】（卖出/买入/批发/

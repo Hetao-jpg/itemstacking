@@ -28,12 +28,17 @@ public partial class Main
     //   ┌ 容器白名单 ContainerWhitelist  —— 非空 ⇒ 仅名单内容器可堆叠（★ 唯一作用域开关）
     //   ├ 容器黑名单 ContainerBlacklist  —— 名单内容器禁止堆叠（双端判定）
     //   ├ 物品白名单 ItemWhitelist       —— ★ 已删除（2026-10-12：原本就无实际作用）
-    //   └ 物品黑名单 ItemBlacklist       —— 按 id 禁止堆叠（自定义；内置名单已停用，见 StackGates）
+    //   └ 物品黑名单 ItemBlacklist       —— 按 id 禁止堆叠（自定义 + 内置两层）
     //
-    //   ★★ 当前（0.12.x）真正生效的堆叠拦截只有两类：
+    //   ★★ 当前真正生效的堆叠拦截（三条）：
     //     ① 状态一致性闸门（恒定开启，无开关）：两件物品的完整状态必须【完全相等】才可合并；
-    //     ② 按 id 的自定义黑名单（受 cfg「StackBlacklist」总闸控制）。
-    //        ★ 内置 id 黑名单（node/module/keycard/文书…）已于 2026-10-12 注释停用。
+    //     ② 按 id 的【内置】黑名单（cfg「BuiltinIdBlacklist」控制，默认开；见 StackGates）；
+    //     ③ 按 id 的【自定义】黑名单（cfg「ItemBlacklist」）。
+    //        ★ ②③ 同时受 cfg「StackBlacklist」总闸控制（总闸关 = 内置 + 自定义全关）。
+    //   ★ 历史沿革（★ 勿再沿用旧说法）：
+    //     内置 id 黑名单曾于 2026-10-12 被注释停用（#if false），2026-10-13 起【恢复启用】；
+    //     2026-10-14（P1-5）把编译期 `#if true` 改为运行期 cfg 开关 BuiltinIdBlacklist（默认开）。
+    //     ⇒ 「内置黑名单已停用」这类表述自 2026-10-13 起即为【错误】，勿再回填。
     //   ★ 旧版（≤0.7.1）的 9 条「类判据」（可鉴定 / 赃物 / 未拥有 / 电量不同 / 动物 / 鼠 /
     //     酒瓶 / 耐久 / 液体容器）自 0.11.0 起【永久停用】—— 它们是①的真子集，
     //     且其实现代码已在 2026-10-12 重构时删除（原 StackGates.cs 的 `#if false` 块，
@@ -42,6 +47,12 @@ public partial class Main
 
     // 总闸：一键关闭全部黑名单保护（保留原 StackBlacklist 键名，向后兼容旧 cfg）。
     private static MelonPreferences_Entry<bool> _stackBlacklist = null!;
+
+    // ★★ P1-5（2026-10-14）：内置 id 黑名单的【独立开关】（默认开）。
+    //   动因：内置段原先用编译期 `#if true`（StackGates.GetBlacklistReason），
+    //   玩家改不了 ⇒ 文档/代码/日志三处对「到底启用没有」永远说不清（P0-1 的根因）。
+    //   语义：总闸关 = 内置 + 自定义全关；本项关 + 总闸开 = 仅内置关、自定义仍生效。
+    private static MelonPreferences_Entry<bool> _builtinIdBlacklist = null!;
 
     // ── ① 容器白名单（合并了旧 StackScope + StrictWhitelist）──
     //   语义：留空 = 不限容器（全部允许）；非空 = **只有名单内容器可堆叠**。
@@ -69,11 +80,6 @@ public partial class Main
     // ── ③ 物品黑名单（原 BlockItemIds 改名）──
     //   语义：逗号分隔物品 id，禁止堆叠（自定义项；内置名单见 BuiltinBlock* 常量）。
     private static MelonPreferences_Entry<string> _itemBlacklist = null!;
-
-    // ── 柜台禁堆（容器黑名单的「运行时实例版」，不靠 id）──
-    //   判据 = EmporiumEntry 三个柜台格实例指针比对：
-    //     frontInvinvElement(0x88) / backInvinvElement(0x98) / backInvinvElementCounter(0xA0)。
-    private static MelonPreferences_Entry<bool> _blockCounterStack = null!;
 
     // ★ 0.10.0（阶段5）：内置黑白名单已外置到 `BuiltinBlacklist.cs`
     //   —— 代码默认值（DefaultBlock*）+ 可选外部 JSON 覆盖，读取点为 static 字段
@@ -123,6 +129,15 @@ public partial class Main
     //   false       = 关闭值域校验（退回只比状态，可能放行「偏离默认」的堆叠）。
     private static MelonPreferences_Entry<bool> _valueGate = null!;
 
+    // ★ P0-2（2026-10-14）：MaxNumAdd「只提升不收紧」→ 可选的硬上限收紧开关。
+    //   默认关：先只跑 maxnumadd.clamp.* 探针（只读），确认「原生值 > 硬上限」是否真发生过，
+    //   再决定要不要打开收紧（打开会改变原版对特殊物品容量控制的行为）。
+    private static MelonPreferences_Entry<bool> _strictStackCap = null!;
+
+    // ★ 2026-10-14：机器容器「全程不允许堆叠 + 每格 1 件」的公共瓶颈闸门（默认开）。
+    //   见 StackPatches.Merge.cs 的 Patch_SlotMarkerTryAcceptOnce 阶段0。
+    private static MelonPreferences_Entry<bool> _machineOnePerSlot = null!;
+
     // ★ L2（2026-10-12 计划·可选阶段）：启动日志分级。
     //   true（默认） = 逐项明细全打（= 现状，行为不变）。
     //   false        = 只打「核心汇总 1-2 行」；安全边界 Warning 与 AltPairMode 未知值
@@ -164,7 +179,7 @@ public partial class Main
             "诊断日志（总开关）",
             "0.9.0 起：控制【本 mod 全部诊断输出】，不再只是 [Diag] 前缀那部分。" +
             "受控的探针日志：[Diag] / [Alt 落点] / [Alt 数量钳制] / [转场探针] / " +
-            "[落点抬升] / [整堆计价] / [柜台探针] / [柜台禁堆] / [柜台id] / [作用域探针] / [修饰键] / " +
+            "[落点抬升] / [整堆计价] / [柜台探针] / [柜台id] / [作用域探针] / [修饰键] / " +
             "[Ctrl 快移·拦截]。" +
             "★ 不受本项影响、始终输出的只有两类：" +
             "① 启动自检（加载行 + 补丁目标自检结果）—— 否则无法判断 mod 有没有装上；" +
@@ -183,12 +198,31 @@ public partial class Main
             "0.5.0 起：阻止「有独立状态」的物品被堆叠，避免丢失鉴定/所有权/进度等属性。\n" +
             "★ 当前真正生效的拦截：\n" +
             "  ① 状态一致性闸门（恒定开启，【不被本项关闭】）：两件物品的完整状态必须完全相等才可合并；\n" +
-            "  ② 按 id 的内置黑名单 + 自定义 ItemBlacklist（均受本项控制）。\n" +
-            "  ★ 更正（2026-10-13）：内置 id 黑名单（node/module/keycard/文书类等）已于 2026-10-12\n" +
-            "    【恢复启用】（StackGates.GetBlacklistReason 的 #if true 段），并非停用。\n" +
+            "  ② 按 id 的内置黑名单（另受 BuiltinIdBlacklist 控制）+ 自定义 ItemBlacklist。\n" +
+            "  ★ 更正（2026-10-14）：内置 id 黑名单【处于启用状态】—— 2026-10-12 曾注释停用，" +
+            "2026-10-13 恢复启用，2026-10-14 起改由 cfg「BuiltinIdBlacklist」控制（默认开）。\n" +
+            "    ⇒ 任何「内置名单已停用」的旧表述均已作废，以本项与 BuiltinIdBlacklist 为准。\n" +
             "关闭本项 = 关掉 ② 的【内置 + 自定义】id 黑名单；① 与容器白/黑名单不受影响。\n" +
             "★ 历史：0.8.0 前还有 9 条「类判据」（可鉴定/赃物/未拥有/电量/动物/鼠/酒瓶/耐久/液体容器），" +
             "已被状态一致性闸门完全覆盖（它们是状态比较的真子集），自 0.11.0 起【永久停用、不再有开关】。");
+
+        // ── P1-5（2026-10-14）：内置 id 黑名单【独立开关】（默认开）──
+        //   原实现是编译期 `#if true`（StackGates.GetBlacklistReason），玩家改不了，
+        //   导致「内置名单到底启用没有」在文档/代码/启动日志里三套说法（P0-1）。
+        //   本项即该问题的【唯一权威来源】。
+        _builtinIdBlacklist = cat.CreateEntry<bool>(
+            "BuiltinIdBlacklist", true,
+            "内置 id 黑名单（node/module/keycard/文书等）",
+            "★ 2026-10-12 起默认【启用】。控制 BuiltinBlacklist.cs 的代码默认名单：" +
+            "净水试纸/药片、星尘莓果实/花莓种子/果酿、能量阵列(powerblock)、" +
+            "模组 module/neural_core、节点 node*、文书/名片/刮刮乐/指南手册等。\n" +
+            "★ 与 StackBlacklist 总闸的关系：" +
+            "总闸关 = 内置 + 自定义全关；本项关 + 总闸开 = 仅内置关、自定义 ItemBlacklist 仍生效。\n" +
+            "★ 关闭后仅 cfg 自定义 ItemBlacklist 生效（适用于「想自己决定拦哪些物品」）。\n" +
+            "★ 备注：能量电池（energy_credit / energy_credit_ext / energy_credit_breeder）" +
+            "与金属锭（metal_ingot）当前【不在】启用名单内，需拦截请填自定义 ItemBlacklist。\n" +
+            "★ 历史：本项原为编译期 `#if true`，2026-10-14 改为运行期开关。");
+
 
         // ── ① 容器白名单（★ 唯一作用域开关 = 安全边界）──
         //   2026-10-12：默认值从「空（全不生效）」改为用户指定的常用容器集合。
@@ -240,26 +274,39 @@ public partial class Main
             "物品黑名单（按 id 禁止堆叠）",
             "0.8.0：逗号分隔的物品 identifier，这些物品禁止被堆叠（用于无通用 tag 的特定物品）。" +
             "★ 内置名单硬编码在代码里（BuiltinBlacklist.cs）：净水试纸/药片、钥匙卡、莓果与果酿、" +
-            "能量阵列、模组 module/neural_core、节点 node*、文书/名片/刮刮乐类 等（受 StackBlacklist 总闸控制）；" +
+            "能量阵列、模组 module/neural_core、节点 node*、文书/名片/刮刮乐类 等" +
+            "（受 StackBlacklist 总闸 + BuiltinIdBlacklist 开关控制）；" +
             "本项只用于在此基础上【额外】自定义。" +
             "留空 = 不额外拦截（内置项仍生效）。" +
             "★ 更正（2026-10-13）：能量电池（energy_credit / energy_credit_ext / energy_credit_breeder）" +
             "当前【未启用】内置拦截（代码中该三行被注释）—— 若需拦截请在下面按 id 填入。" +
             "★ 值含逗号时请【用引号包起来】：ItemBlacklist = \"foo,bar\"。");
-        // ── 柜台禁堆（0.6.5）──
-        //   ★ 修复：本项此前只有字段声明、漏了 CreateEntry，导致 OnInitializeMelon 读
-        //     `_blockCounterStack.Value` 时 NRE（启动即中止，「柜台禁堆」长期静默失效）。
-        _blockCounterStack = cat.CreateEntry<bool>(
-            "BlockCounterStack", false,
-            "柜台禁堆",
-            "0.9.0 起【默认关闭】。开启后，交易柜台容器内【任何方式】都不允许堆叠合并 —— 包括鼠标拖放、" +
-            "Alt 快移、LeftCtrl 快移。柜台里同名物品会各自占一格，不再并成一堆。\n" +
-            "判据用游戏自己的 EmporiumEntry 三个柜台格实例（frontInvinvElement / backInvinvElement / " +
-            "backInvinvElementCounter），不靠硬编码 id。\n" +
-            "★ 为什么默认关：0.9.0 补上整堆计价（StackValueTotal）后，柜台合并不再亏钱 —— " +
-            "卖出一堆会按整堆总价值结账，所以当初为规避「柜台亏钱」而加的禁堆闸门已无必要，" +
-            "反而妨碍玩家把同种商品并成一堆、腾出柜台格位。\n" +
-            "★ 若你担心柜台里同种商品被误合并造成难以分拣，可手动改回 true。");
+        // ★ 2026-10-14（用户定稿）：【柜台禁堆】功能整体删除。
+        //   原项 BlockCounterStack（柜台容器内禁止任何堆叠合并）连同其判据
+        //   IsCounterSlot / IsCounterInventory、MergeSteerer 的柜台导流分支一并移除。
+        //   理由：0.9.0 补上整堆计价后柜台合并不再亏钱；该功能默认关、又长期只作为
+        //   「额外的运行时判据」增加复杂度（含一次 NRE 静默失效史），用户明确不再需要。
+        //   历史实现见 git 历史（IsCounterInventory 的 0.6.5/0.6.6 反汇编考证）。
+        // ── 2026-10-14：机器容器「每格 1 件 + 全程不允许堆叠」（默认开）──
+        //   下沉到公共瓶颈 `SlotMarker.TryAcceptOnce`，覆盖【所有】入口：
+        //   鼠标拖放 / Ctrl+拖动整堆 / 拖到机器图标 / Ctrl+点击快移 / Alt 快移 /
+        //   GraphUtils 系列（TryAcceptOnce / TryAcceptAll / TryAcceptAllMid / InsertToActiveContainer）。
+        //   行为：落点容器是机器容器时 ——
+        //     · 该槽已有物品（合并候选）→ 禁止合并，改投机器内空槽（每格 1 件）；
+        //       机器无空槽 → 拒绝本次放置（物品留在源处，不丢不覆盖）。
+        //     · 该槽是空槽且本次要放多件 → 一次性把整堆铺进机器所有空槽（每格 1 件）。
+        _machineOnePerSlot = cat.CreateEntry<bool>(
+            "MachineOnePerSlot", true,
+            "机器容器每格 1 件（禁并）",
+            "★ 默认【开】。机器容器（熔炉 / 解序器 / 水瓶打印机 / 模块仓 等，见 machineContainers 名单）内：" +
+            "不允许任何堆叠合并，且每个格子只放 1 件。\n" +
+            "【为什么需要】原版机器逻辑按「一槽一实例」写：把 unitCount>1 的堆塞进一个格子，" +
+            "机器会只认成 1 件或整堆销毁（0.9.6~0.10.0 修过一长串丢件 bug）。\n" +
+            "【开启后的手感】把一叠物品快移/拖进机器时：能进，但会被【逐格铺开】成一格一件；" +
+            "机器格子放满后，剩下的【留在原处】并记一条诊断日志（不会静默丢弃）。\n" +
+            "【什么时候关】只有在装了【本 mod 未内置识别】的特殊机器、且确认它自己能正确处理" +
+            "堆叠物品时才关。关掉后回到旧行为：机器里可能再次出现 unitCount>1 的堆（有丢件风险）。");
+
         // ── 修饰键快移总闸（0.12.0，§四·2）──
         _modifierKeysEnabled = cat.CreateEntry<bool>(
             "ModifierKeysEnabled", true,
@@ -360,6 +407,27 @@ public partial class Main
             "  也会一并关掉 0.14.0 的非 0 热度赃物拦截）。\n" +
             "★ 普通玩家：保持 true，不要动。");
 
+        // ── P0-2（2026-10-14）：MaxNumAdd 硬上限收紧（默认关，先观测）──
+        //   背景：Patch_MaxNumAdd 历来「只提升、不收紧」（保留游戏原有全部约束）。
+        //   但原生 MaxNumAdd(0x798160) 有两条会给出超大值的路径：
+        //     ① 早退分支 `slot[0x18] == null → return 0x7FFFFFFF`；
+        //     ② 三处 maxSlotAmountItemFunc 任一被外部 mod 注入大值。
+        //   ⇒ 这类值会被「只提升」的逻辑原样放行，StackCap 失效。
+        //   处理：探针恒开（maxnumadd.clamp.*，只读不改），收紧本体由本开关控制。
+        _strictStackCap = cat.CreateEntry<bool>(
+            "StrictStackCap", false,
+            "堆叠上限硬收紧（探针恒开）",
+            "★ 默认【关】：不改原生返回值，只输出 maxnumadd.clamp.* 探针日志。\n" +
+            "【为什么默认关】Patch_MaxNumAdd 的设计原则是「只提升、不收紧」，" +
+            "以保留游戏自身的容量约束；收紧会改变原版对某些物品/机器容量的行为，" +
+            "而纯净环境（三处 maxSlotAmountItemFunc 全 null）下原生值恒为 1，" +
+            "【根本不会触发】收紧 —— 也就是说这项只在装了别的 mod 时才可能有意义。\n" +
+            "【怎么决定】把 DiagLog 打开正常玩几天，搜日志里的「MaxNumAdd 超出硬上限」：" +
+            "一条都没有 ⇒ 保持关闭即可；确有命中 ⇒ 再打开本项。\n" +
+            "【开启后的行为】原生返回值 > 硬上限（已有堆按 StackCap − 该堆件数算）时收紧到硬上限；" +
+            "下限恒保 1（绝不返回 0 —— 返 0 会打断 GraphUtils.TryAcceptAll 的逐格填充循环，" +
+            "导致「既不合并、也不再找空位」，见 StackPatches.Merge.cs 头部 0.10.1 注释）。");
+
         _altQuickTransferAmount = cat.CreateEntry<int>(
             "AltQuickTransferAmount", 1,
             "Alt 快移件数",
@@ -412,6 +480,23 @@ public partial class Main
     //   原写法 `_enableStacking.Value` 会 NRE（0.9.8 实机首崩同类根因，见 Main.cs 日志注释）。
     //   未初始化时视为「开启」（保守：补丁行为与 cfg 默认 true 一致）。
     internal static bool StackEnabled => _enableStacking == null || _enableStacking.Value;
+
+    // ★ P1-5（2026-10-14）：内置 id 黑名单开关（cfg BuiltinIdBlacklist，默认 true）。
+    //   null 兜底 true —— HarmonyInit 阶段会先自动 PatchAll 一次，那时 cfg 尚未建表
+    //   （与 StackEnabled 同因，见上行注释），未初始化时视为「开启」（= 代码默认值）。
+    internal static bool BuiltinIdBlacklist =>
+        _builtinIdBlacklist == null || _builtinIdBlacklist.Value;
+
+    // ★ P0-2（2026-10-14）：MaxNumAdd 硬上限收紧开关（cfg StrictStackCap，默认 false）。
+    //   false（默认）= 只跑 maxnumadd.clamp.* 探针、不改原生返回值（行为与改动前逐字节一致）；
+    //   true          = 原生返回值 > 硬上限时收紧到硬上限（防外部注入 maxSlotAmountItemFunc
+    //                   或原生 slot[0x18]==null 早退分支返回 0x7FFFFFFF 绕过 StackCap）。
+    internal static bool StrictStackCap => _strictStackCap != null && _strictStackCap.Value;
+
+    // ★ 2026-10-14：机器容器【每格 1 件 + 全程不允许堆叠】的公共瓶颈闸门。
+    //   null 兜底 true（与 cfg 默认一致；HarmonyInit 阶段补丁可能先于建表被调用）。
+    //   false = 退回「只在 MayStack 层禁并」的旧行为（拖动整堆可能一次占满一格）。
+    internal static bool MachineOnePerSlot => _machineOnePerSlot == null || _machineOnePerSlot.Value;
 
     // 1.1.0：价值一致性闸门（cfg ValueGate，默认 true）。
     //   null 兜底 true（尚未初始化时视为开启，保守）。

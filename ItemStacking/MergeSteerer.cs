@@ -29,18 +29,17 @@ public partial class Main
     //   ① Alt 快移（AltTransferScope）：必须逐件/定量快移，不能并进已有堆。
     //      依据：GameGridScrollableInventory(0x77B750) 合并循环在 0x77BB4E 调 MayStack，
     //      false 即 je 循环；循环耗尽唯一出口是其空槽分支 0x77BCAD。
-    //   ② 柜台（IsCounterInventory，仅 BlockCounterStack=true 时）：
-    //      ExpeditionHelper.SetHirelingEquipmentOnCounter → GraphUtils.TryAcceptAll 是
-    //      「逐格填充整堆」循环，某轮被拒返回 0 就 break ⇒ 必须导流到空槽，
-    //      否则跨场景转移只搬极少件（0.7.1 实机 bug）。
-    //   ③ §四 配对快移（0.11.0 Alt / 0.12.0 Shift）：由 AltPairMerge 开关决定（见下方 ⓪）。
+    //   ② §四 配对快移（0.11.0 Alt / 0.12.0 Shift）：由 AltPairMerge 开关决定（见下方 ⓪）。
+    //   ★ 2026-10-14：原「② 柜台（IsCounterInventory，仅 BlockCounterStack=true 时）」已随
+    //     柜台禁堆功能整体删除（用户定稿：不再需要）—— 历史见 git（IsCounterInventory 的
+    //     0.6.5/0.6.6 反汇编考证）。现柜台容器与普通容器同规则（走 MergePolicy）。
     //
     //  ★ 与 MergePolicy 的关系：导流【优先于】决策。MayStack 先问 Steerer；
     //    true ⇒ 直接 false（导流），不进 MergePolicy。false ⇒ 进 MergePolicy 决策。
     // ══════════════════════════════════════════════════════════════════════
 
     // 是否应导流（强制禁并 → 让原生找空格）。
-    //   ctx 提供落点容器（slotInventory），用于判定柜台场景。
+    //   ctx 保留为形参（调用方签名不变）；2026-10-14 起柜台判据删除后，本方法不再读 ctx。
     //   ★ 只读判断，不改变任何状态。
     internal static bool ShouldSteerToEmptySlot(in MergeContext ctx)
     {
@@ -62,10 +61,8 @@ public partial class Main
             // ① Alt 快移作用域：恒定导流（本场景就是要逐件/定量搬，不能合并）。
             if (AltTransferScope) return true;
 
-            // ② 柜台容器：仅 BlockCounterStack=true 时 IsCounterInventory 才为真
-            //    （默认关闭 ⇒ 默认不导流，与 0.9.9 一致）。
-            if (IsCounterInventory(ctx.slotInventory)) return true;
-
+            // ★ 2026-10-14：原「② 柜台容器（BlockCounterStack）」分支已删除 —— 柜台不再特殊，
+            //   是否合并交给 MergePolicy 统一决策。
             return false;
         }
         catch (Exception e)

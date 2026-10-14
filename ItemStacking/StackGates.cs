@@ -107,13 +107,15 @@ public partial class Main
     //       · 鉴定/赃物/未拥有/动物/鼠 均为 state tag
     //      ⇒ 9 条类判据是状态比较的【真子集】⇒ 永久停用（本方法不再调用它们）。
     //
-    //   ② 【按 id 黑名单 ★ 2026-10-12 注释停用】：用户要求停用内置 id 黑名单
-    //      （node*/module*/neural_core/*_keycard/文书类等）。停用后仅 cfg 自定义
-    //      ItemBlacklist 仍生效。恢复方法：把下方内置段的 #if false 改回 #if true。
+    //   ② 【按 id 黑名单：★ 处于启用状态，由 cfg「BuiltinIdBlacklist」控制（默认开）】
+    //      覆盖 node*/module*/neural_core/*_keycard/文书类等。
+    //      沿革：2026-10-12 曾注释停用（#if false）→ 2026-10-13 用户要求恢复启用（#if true）
+    //            → 2026-10-14（P1-5）改为运行期 cfg 开关 BuiltinIdBlacklist（默认 true）。
+    //      ★ 因此「内置 id 黑名单已停用」属【错误】表述，已于 2026-10-14 全库统一（P0-1）。
     //
     //  ── 现状 ──
     //   · 类判据：停用（状态闸门承担）。
-    //   · 内置 id 黑名单：★ 停用（2026-10-12，见方法头②）。
+    //   · 内置 id 黑名单：★ 启用（受 cfg BuiltinIdBlacklist 控制，默认开）。
     //   · 自定义 ItemBlacklist：仍生效。
     //   · 物品白名单（ItemWhitelist）：★ 已删除（2026-10-12，原本就无实际作用）。
     // ══════════════════════════════════════════════════════════════════════
@@ -129,11 +131,14 @@ public partial class Main
             // 若需回滚，见 git 历史：HEAD dc3d11a 版 StackGates.cs 的 #if false 块。
             // ══════════════════════════════════════════════════════════════════
 
-            // ══════════ 内置 id 黑名单：2026-10-12 用户要求【恢复启用】═══════════
-            //   恢复模组/节点/钥匙卡/文书类等按 id 拦截（尤其 module/node/neural_core 模组类）。
-            //   若需再次停用：把 #if true 改回 #if false 重新编译。
-#if true
-            // 0.6.1：按 id 黑名单（特定物品）。
+            // ══════════ 内置 id 黑名单（cfg「BuiltinIdBlacklist」，默认开）═══════════
+            //   覆盖模组/节点/钥匙卡/文书类等按 id 拦截（尤其 module/node/neural_core 模组类）。
+            //   ★ P1-5（2026-10-14）：本段原为编译期 `#if true`（玩家改不了），现改为运行期开关 ——
+            //     停用方式：cfg 里把 BuiltinIdBlacklist 改成 false 即可，无需重新编译。
+            //   ★ 总闸「StackBlacklist」= false 时本段整体不执行（见方法首行 return）。
+            if (BuiltinIdBlacklist)
+            {
+                // 0.6.1：按 id 黑名单（特定物品）。
             // ⚠️ 硬编码 id 的脆弱性：identifier 由配置提供、来源为游戏 0.46D 物品目录。
             //    游戏若改名，相关拦截会【静默失效】（无报错）；用 DiagLog 可观测是否命中。
             //
@@ -146,24 +151,24 @@ public partial class Main
             //   MatchIdPair(...) 一行一段（helper 见本方法下方 IdMatch / MatchIdPair / MatchesId）。
             //   等价性：仍是「按模式串外层循环 → 先 a 后 b → 命中即返回」，且把
             //   【命中的模式串】塞回原因文案 ⇒ 日志格式与合并前逐字节一致。
-            var pat = MatchIdPair(a, b, BuiltinBlockItemIds, IdMatch.Exact);
-            if (pat != null) return "按 id 黑名单·内置（" + pat + "）";
+                var pat = MatchIdPair(a, b, BuiltinBlockItemIds, IdMatch.Exact);
+                if (pat != null) return "按 id 黑名单·内置（" + pat + "）";
 
             // ★ 0.7.0：按 id 前缀拦截整类（节点 node*）。
             //   判据用 identifier.StartsWith（忽略大小写），null 安全交给 string.IsNullOrEmpty 前置判断。
-            pat = MatchIdPair(a, b, BuiltinBlockIdPrefixes, IdMatch.Prefix);
-            if (pat != null) return "按 id 前缀黑名单·内置（" + pat + "*）";
+                pat = MatchIdPair(a, b, BuiltinBlockIdPrefixes, IdMatch.Prefix);
+                if (pat != null) return "按 id 前缀黑名单·内置（" + pat + "*）";
 
             // ★ 0.8.1：按 id 子串拦截整类（模组 module / 神经核心 neural_core）。
             //   判据用 identifier.Contains（忽略大小写）—— module 在 system_module_*/farm_module_*/… 的
             //   中间/末尾，前缀匹配抓不到；neural_core 完全不含 module，也要单独子串。
-            pat = MatchIdPair(a, b, BuiltinBlockIdContains, IdMatch.Contains);
-            if (pat != null) return "按 id 子串黑名单·内置（*" + pat + "*）";
+                pat = MatchIdPair(a, b, BuiltinBlockIdContains, IdMatch.Contains);
+                if (pat != null) return "按 id 子串黑名单·内置（*" + pat + "*）";
 
             // ★ 0.7.1：按 id 后缀拦截整类（钥匙卡 *_keycard），带豁免表（blank_keycard 放行）。
-            pat = MatchIdPair(a, b, BuiltinBlockIdSuffixes, IdMatch.Suffix, IsSuffixExempt);
-            if (pat != null) return "按 id 后缀黑名单·内置（*" + pat + "）";
-#endif
+                pat = MatchIdPair(a, b, BuiltinBlockIdSuffixes, IdMatch.Suffix, IsSuffixExempt);
+                if (pat != null) return "按 id 后缀黑名单·内置（*" + pat + "）";
+            }
             // ══════════════════════════════════════════════════════════════════
 
             if (_itemBlacklist != null && !string.IsNullOrWhiteSpace(_itemBlacklist.Value))
@@ -709,97 +714,25 @@ public partial class Main
         }
     }
 
-    // ── 0.6.5：交易柜台内禁止堆叠（覆盖【所有】合并路径）──
+    // ── ★ 2026-10-14：【柜台禁堆】判据整体删除（用户定稿：不再需要该功能）──
     //
-    // 为什么需要这一层（根因取证）：
-    //   本 mod 原有的堆叠闸门只挂在 `GameItem.MayStack` / `GameItem.GetStackSlot` 上。
-    //   但反汇编实锤，键位快移走的是完全不同的另一条路：
-    //     ItemQuickTransferAltHandler(1).OnEventRelease / ItemQuickTransferHandler.OnEventRelease
-    //       → GraphUtils.TryAcceptOnce(GraphNodeStorage, GameItem, int)（0x766730）
-    //       → SlotMarker.TryAcceptOnce(int)（0x7B0020）
-    //            · targetItem == null（空槽）→ GameInventory.UncheckedAccept（Slot 19）← 纯「移动」
-    //            · targetItem != null（有堆）→ SlotMarker.StackItemUnchecked（0x7AFDF0）
-    //   `SlotMarker.StackItemUnchecked` 就是真正的合并实现，汇编只有两行算术：
-    //       0x7AFE41  add dword ptr [rdi + 0x1F8], esi     ; targetItem.unitCount += n
-    //       0x7AFE50  sub dword ptr [rbx + 0x1F8], esi     ; sourceItem.unitCount -= n
-    //   **它一个 gate 都不查** —— 没有 MayStack、没有 GetStackSlot、没有任何委托回调。
-    //   ⇒ 所以 Alt/Ctrl 快移能绕过全部黑名单/作用域判定，把第 2 件并进柜台已有的堆。
+    //  删除内容：`IsCounterSlot(SlotMarker)` + `IsCounterInventory(GameInventory)`
+    //           + cfg 项 `BlockCounterStack` + MergeSteerer 的柜台导流分支。
     //
-    // 对策：把闸门下沉到这条公共瓶颈 `SlotMarker.TryAcceptOnce`。
-    //   · 只在【合并】（targetItem != null）时判定；空槽放置是「移动」不是「堆叠」，一律放行。
-    //   · 落点容器从 `SlotMarker.inventory`（0x18，GameInventory）取 —— 对快移路径就是
-    //     「鼠标落点窗口里第一个有效槽所在的容器」，语义与拖放一致。
-    //   · 判定复用既有两条规则：GetScopeReason（白名单）+ GetExcludeReason（黑名单）
-    //     + IsCounterSlot（柜台），保证「拖放拦的，快移也拦」。
+    //  ▸ 为什么删：0.9.0 补上整堆计价（StackValueTotal）后「柜台合并会亏钱」的动因消失，
+    //    该项自 0.9.0 起默认关闭；它长期只是「额外的运行时判据」（还出过一次
+    //    漏 CreateEntry → 启动读值 NRE → 静默失效的事故），维护成本＞收益。
+    //  ▸ 现柜台容器与普通容器完全同规则：走 MergePolicy（状态一致性 / 物品黑名单 /
+    //    容器黑/白名单），不再有「柜台特殊」这一档。
+  //
+    //  ★ 历史实现与反汇编考证（判据为何是 front(0x88)+back(0x98)+counter(0xA0) 三格）
+    //    见 git 历史（0.6.5/0.6.6 提交）。删掉的判据曾用于：
+    //      · TryAcceptOnce 公共瓶颈层（「拖放拦的、快移也拦」）；
+    //      · MayStack 层（按容器判，见旧 IsCounterInventory 调用点）。
     //
-    // ★ 0.6.6 修正柜台判据（0.6.5 认错了容器，实机无效）：
-    //   0.6.5 只用 `EmporiumEntry.backInvinvElementCounter`(0xA0) 一个容器比对 —— 反汇编复核后确认这是**错的**：
-    //     · `EmporiumEntry.GetCountersItems`(0x7CE010) 读的是 frontInvinvElement(0x88) **Concat** backInvinvElement(0x98)
-    //       → 「柜台」在游戏眼里 = front + back 两个格。
-    //     · `EmporiumEntry.Start`(0x7D49A0) 里三个格的构造尺寸：
-    //           [rdi+0x88] frontInvinvElement        18×4   ← 柜台正面
-    //           [rdi+0x98] backInvinvElement         18×4   ← 柜台背面
-    //           [rdi+0xa0] backInvinvElementCounter  18×4   ← 第三个格（影子/另一处柜台）
-    //     · 形状改写只发生在 0x88：`ResetFrontCounterGrid`(0x7D38B0) / `ExpandFrontCounterGrid`(0x7CB3B0)
-    //       都 `mov rcx,[rcx+0x88]` → SetShape；`SwapInv`(0x7D7BB0) 交换的也是 0x88 ↔ 0x98。
-    //     · `backInvinvElementCounter`(0xA0) 全库只有 3 处引用（Start 构造 + GetAllOwnedItems(Shallow) 读），
-    //       玩家拖放/快移**永远不会**落在它上面 ⇒ 0.6.5 的判据永远返回 false，功能静默失效。
-    //   ⇒ 正解：把「柜台容器集合」定义为 front(0x88) + back(0x98) + counter(0xA0)，任一命中即视为柜台。
-    //
-    // 判据实现：不硬编码 identifier（柜台容器运行时创建，identifier 可能为空），
-    //   直接用 EmporiumEntry.Instance 上的这三个容器引用做指针比对（廉价、稳定）。
-    //   每次实时取，不缓存 —— 换场景/开关窗口可能重建容器，缓存旧引用会让判据失效。
-    private static bool IsCounterSlot(SlotMarker slot)
-    {
-        try
-        {
-            if (_blockCounterStack == null || !_blockCounterStack.Value) return false;
-            return IsCounterInventory(slot == null ? null : slot.inventory);
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            LogOnce("counterslot", Level.Warn, $"柜台判定异常，本次不阻断: {e.Message}");
-            return false;
-        }
-    }
+    //  （下列工具方法保留：TryGet / Ptr / SafeId / SameNativePointer / Describe —— 2026-10-12
+    //    已抽出至 Il2CppHelpers.cs，原 SameInventory 包装已删除，调用点直接改调 SameNativePointer。）
 
-    // ★ 0.7.1：同一个判据的「按容器」入口（给 MayStack 用 —— 那条路径只有 GameItem，没有 SlotMarker）。
-    //   front(0x88) / back(0x98) / counter(0xA0) 三格任一命中即视为柜台。
-    internal static bool IsCounterInventory(GameInventory inv)
-    {
-        try
-        {
-            if (_blockCounterStack == null || !_blockCounterStack.Value) return false;
-            if (inv == null) return false;
-
-            var entry = EmporiumEntry.Instance;
-            if (entry == null) return false;      // 不在交易场景 → 不可能命中柜台
-
-            // ★ 直读三个柜台格（与 MatchEmporiumSlot 同款：entry 预取 + 逐属性 try/catch）——
-            //   不再逐属性分配 `TryGet(()=>entry.xxx)` 闭包（原实现一次调用 3 个委托 + 3 次 invoke）。
-            //   异常语义与原 TryGet 一致（异常 → 该项视为 null，跳过）。
-            GameGridInventory eFront = null, eBack = null, eBackC = null;
-            try { eFront = entry.frontInvinvElement; } catch { }
-            try { eBack = entry.backInvinvElement; } catch { }
-            try { eBackC = entry.backInvinvElementCounter; } catch { }
-
-            if (SameNativePointer(inv, eFront)) return true;
-            if (SameNativePointer(inv, eBack)) return true;
-            if (SameNativePointer(inv, eBackC)) return true;
-            return false;
-        }
-        catch (Exception e)
-        {
-            if (e is OutOfMemoryException || e is StackOverflowException) throw;
-            MarkJudgeFault(FaultConvenience);   // 阶段2：便利类异常 → Evaluate 将判 Allow
-            LogOnce("counterinv", Level.Warn, $"柜台容器判定异常，本次不阻断: {e.Message}");
-            return false;
-        }
-    }
-
-    // （TryGet / Ptr / SafeId / SameNativePointer / Describe 已抽出至 Il2CppHelpers.cs，
-    //   2026-10-12；原 SameInventory 包装已删除，调用点全部直接改调 SameNativePointer。）
 
     // 合并闸门的统一判定：返回「拒绝原因」，null = 允许。
     // target = 被并进的那一格上的物品（目标堆），source = 要并进去的物品。

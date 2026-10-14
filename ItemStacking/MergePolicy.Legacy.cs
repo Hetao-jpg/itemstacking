@@ -39,41 +39,15 @@ public partial class Main
             __result = false;
             return false;
         }
-        // ★★★ 0.7.1：柜台内禁止堆叠 —— **在这里让 MayStack 恒 false**（而不是只在
-        //   `SlotMarker.TryAcceptOnce` 上拒绝）。为什么必须提前到这一层：
-        //
-        //   实机现象（用户 2026-10-08）：「堆叠物品从垃圾站/配给站/杰克逊博士转场景回商店，
-        //   堆叠数变成 1，其余留在原地」。反汇编定位到根因链：
-        //     ExpeditionHelper.SetHirelingEquipmentOnCounter(0x8B6820)
-        //       → GraphUtils.TryAcceptAll(柜台窗口, item, -1)（0x766650）
-        //       → { 循环：TryFindOneValidInventorySlot(item) → 若 numTransfer<=0 **break**；
-        //                 SlotMarker.TryAcceptOnce(剩余) → **返回 0 也 break** }
-        //   ⇒ 这是「逐格填充整堆」的循环。只要**某一轮被拒绝返回 0**，整个循环立刻 break，
-        //     后面的格子再空也不再用 —— 表现就是「只搬进去 N 个，其余留在原地」。
-        //
-        //   0.6.5~0.7.0 的「柜台禁堆」只在 `SlotMarker.TryAcceptOnce` 里 `__result = 0`，
-        //   ⇒ **正好触发上面那个 break**：柜台里已有同名堆时，第一轮拿到「合并落点」→
-        //     被我们拒 → break → 整堆只搬进去极少（甚至 0/1）个。
-        //
-        //   正解（与 0.7.0 Alt 的手法同源、且更贴合原生语义）：
-        //     **在 `MayStack` 这一层让柜台内的合并判定恒 false** —— 原生
-        //     `TryFindOneValidInventorySlot` 的"合并同名堆"循环自然全部落空，直接给出
-        //     **空槽落点**（`numTransfer > 0`）→ `TryAcceptOnce` 走"移动"路径把整堆放进去
-        //     → 逐格填充循环得以继续到放完为止。
-        //     ⇒ 柜台里每个商品依旧**各自占一格**（不合并），但跨场景转移不会丢件。
-        //
-        //   ★ 判据用 `__instance.parentInventory`（柜台里已有那件所在的容器）。
-        //   ★ 只在"目标物品已在柜台容器内"时生效；玩家在背包里整理不受影响。
+        // ★★★ 2026-10-14：原「0.7.1 柜台内禁止堆叠（MayStack 恒 false）」整段已随
+        //   柜台禁堆功能删除（用户定稿）。历史价值保留在 git（0.7.1 的
+        //   ExpeditionHelper.SetHirelingEquipmentOnCounter → GraphUtils.TryAcceptAll 逐格
+        //   填充循环 / 某轮返 0 即 break 的取证）。
+        //   ★ 但该取证留下的【机制结论】仍然有效、且已推广到别处：
+        //     在 `TryAcceptOnce` 层返 0 会打断上层逐格填充循环 ⇒ 拦截要尽量落在 MayStack 层
+        //     （返 false = 让原生跳过该候选、继续找空槽）。现在这条结论服务于【机器容器】。
         var instInv = TryGet(() => __instance.parentInventory);
         if (DiagOn) ProbeScopeInventory(instInv, "落点堆所在(MayStack)");   // §七 1.4
-        if (instInv != null && IsCounterInventory(instInv))
-        {
-            LogOnce("maystack.counter", Level.Warn,
-                $"[柜台禁堆] MayStack 已拦截（柜台内不合并，让原生走找空格分支）：" +
-                $"{__instance.identifier} / {otherItem.identifier}");
-            __result = false;
-            return false;
-        }
         // P0：装了东西的容器禁止堆叠，避免丢失容器内物品。
         if (IsContainer(__instance) || IsContainer(otherItem))
         {
@@ -182,10 +156,8 @@ public partial class Main
     private static string LegacyMergeGateReason(SlotMarker slot, GameItem target, GameItem source)
     {
         // ══════════ 以下为 0.9.9 旧顺序（回滚用，保留未删）══════════
-        // 1) 柜台（0.6.5 新增，运行时判据）
-        if (IsCounterSlot(slot)) return "交易柜台内禁止堆叠";
-
-        // 2) 容器黑名单（0.6.5 起对快移路径也生效；0.9.3 起 token 匹配）
+        // ★ 2026-10-14：原「1) 柜台（IsCounterSlot）」已随柜台禁堆功能整体删除（用户定稿）。
+        // 1) 容器黑名单（0.6.5 起对快移路径也生效；0.9.3 起 token 匹配）
         //    ★ 黑名单优先：命中即 return，后续白名单判定不会覆盖（GetMergeGateReason 中
         //      黑名单在白名单之前 —— 用户 0.9.3 拍板：两个名单同时命中时黑名单赢）。
         //    双端判定：落点 或 拖起方 任一容器命中即拦。
@@ -193,15 +165,15 @@ public partial class Main
         var exclude = GetExcludeReason(target, source);
         if (exclude != null) return exclude;
 
-        // 3) 堆叠作用域（白名单）
+        // 2) 堆叠作用域（白名单）
         var scope = GetScopeReason(target);
         if (scope != null) return scope;
 
-        // 4) 物品黑名单（鉴定/赃物/未拥有/电量/动物/鼠/酒瓶/耐久/液体容器/按id）
+        // 3) 物品黑名单（鉴定/赃物/未拥有/电量/动物/鼠/酒瓶/耐久/液体容器/按id）
         var block = GetBlacklistReason(target, source);
         if (block != null) return block;
 
-        // 5) 装了东西的容器禁止合并（与 MayStack 同判据，防数据丢失）
+        // 4) 装了东西的容器禁止合并（与 MayStack 同判据，防数据丢失）
         if (IsContainer(target) || IsContainer(source)) return "容器（含内部物品）";
 
         return null;

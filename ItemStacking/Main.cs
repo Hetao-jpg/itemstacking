@@ -71,8 +71,7 @@ public partial class Main : MelonMod
             LoggerInstance.Msg(
                 $"  保护总闸 = {_stackBlacklist.Value}。" +
                 $"容器白名单 = {(_containerWhitelist.Value == "" ? "【空 = 全不生效】" : _containerWhitelist.Value)}；" +
-                $"容器黑名单 = {(_containerBlacklist.Value == "" ? "空" : _containerBlacklist.Value)}；" +
-                $"柜台禁堆 = {_blockCounterStack.Value}。");
+                $"容器黑名单 = {(_containerBlacklist.Value == "" ? "空" : _containerBlacklist.Value)}。");
         }
         // ★ 白名单 = 安全边界，空 = 全不生效（mod 等于未启用）。
         //   2026-10-12 起默认已含常用容器；走到这里说明用户手动清空过，醒目提示 + 给恢复串。
@@ -94,13 +93,24 @@ public partial class Main : MelonMod
         if (verboseStartup)
         {
             LoggerInstance.Msg(
-                $"  物品黑名单·自定义 = {(_itemBlacklist.Value == "" ? "空" : _itemBlacklist.Value)}。");
-            // ★ 2026-10-12：内置 id 黑名单恢复启用（用户要求）；类判据维持停用。
+                $"  物品黑名单·内置 = {_builtinIdBlacklist.Value}（cfg BuiltinIdBlacklist）；" +
+                $"自定义 = {(_itemBlacklist.Value == "" ? "空" : _itemBlacklist.Value)}。");
+            // ★ 2026-10-14（P0-1 统一）：本行改为直接读 cfg 值 —— 与 README / Config 注释【同源】，
+            //   不再出现「文档说停用、日志说启用」这种自相矛盾（内置名单自 2026-10-12 起即为启用，
+            //   2026-10-14 由编译期 #if 改为 cfg 开关）。
             LoggerInstance.Msg(
-                "  ★★ 类判据【已停用】（状态一致性闸门已覆盖）；" +
-                "内置 id 黑名单【已恢复启用】（node/module/keycard/文书等重新拦截）；" +
-                "自定义 ItemBlacklist 仍生效。若要停用：把 StackGates.cs 里 GetBlacklistReason " +
-                "的内置段 #if true 改回 #if false 重新编译。");
+                $"  ★★ 类判据【已停用】（状态一致性闸门已覆盖）；" +
+                $"内置 id 黑名单 = {_builtinIdBlacklist.Value}" +
+                (_builtinIdBlacklist.Value
+                    ? "（node/module/keycard/文书等拦截中；要停用就把 cfg 的 BuiltinIdBlacklist 改成 false，无需重编译）"
+                    : "（已关闭：仅 cfg 自定义 ItemBlacklist 生效）") +
+                "。");
+            LoggerInstance.Msg(
+                $"  ★ 堆叠上限硬收紧 = {(StrictStackCap ? "开" : "关（仅探针 maxnumadd.clamp.*）")}" +
+                "（cfg StrictStackCap；详见 Config.cs 该项说明）。");
+            LoggerInstance.Msg(
+                $"  ★ 机器容器每格 1 件（禁并）= {(MachineOnePerSlot ? "开" : "关（机器里可能再次出现堆叠）")}" +
+                "（cfg MachineOnePerSlot；覆盖拖放/Ctrl拖动/快移全部入口）。");
             LoggerInstance.Msg(
                 $"  ★ 状态一致性闸门 = 恒定开启（见上行）+ 忽略名单 {IgnoredStateTags.Length} 项[{_ignoredTagsSource}]。");
             // ★ 0.12.0（§四·2）：修饰键快移「1 总闸 + 3 小开关」的启动汇总。
