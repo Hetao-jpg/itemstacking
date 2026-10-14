@@ -1,7 +1,7 @@
 ======================================================================
 Item Stacking · 自定义物品堆叠
 作者：核桃
-版本：0.14.0
+版本：0.14.2
 游戏：Probably Stolen 0.46D
 环境：MelonLoader 0.7.4+
 ======================================================================
@@ -19,8 +19,9 @@ Item Stacking · 自定义物品堆叠
 · Shift 快移：展示柜 ↔ 主仓库
 · 状态一致性：电量/纯度/品质/磨损/拥有权等完全相等才可合并
 · 容器防护：装了东西的容器禁止合并，防内部物品丢失
-· 物品黑名单：仅 cfg 自定义 ItemBlacklist 生效
-  （内置名单 node/module/keycard/文书等已于 2026-10-12 停用）
+· 物品黑名单：内置名单（node/module/keycard/文书等）默认启用，
+  另可用 cfg 自定义 ItemBlacklist 补充；
+  内置名单可用 cfg BuiltinIdBlacklist 单独关闭（无需改代码）
 · 容器白名单 / 黑名单
 · 整堆计价：卖出/买入/批发/估价按整堆总价值结账（默认关）
 · 销毁修复：水瓶打印机/模块修复/采矿机/拾荒口袋/熔炉/解序器
@@ -72,8 +73,9 @@ DiagLog | 关 | 诊断日志总开关
 StackBlacklist | 开 | 堆叠保护总闸
 ContainerWhitelist | 常用容器集合 | ★ 空 = 全不生效；已含船舱/背包/笼/设备/窗口格
 ContainerBlacklist | 空 | 容器黑名单
-ItemBlacklist | 空 | 自定义物品黑名单（内置名单已停用）
-BlockCounterStack | 关 | 柜台内禁堆
+BuiltinIdBlacklist | 开 | 内置物品 id 黑名单（node/module/keycard/文书等）
+ItemBlacklist | 空 | 额外的自定义物品黑名单（在内置名单之外再补）
+StrictStackCap | 关 | 堆叠上限硬收紧（默认关，只输出 maxnumadd.clamp 探针）
 StackValueTotal | 关 | 整堆计价
 ModifierKeysEnabled | 开 | 修饰键快移总开关
 AltClickTransferToCounter | 开 | Alt 快移总闸
@@ -90,8 +92,9 @@ ContainerWhitelist = "a,b"
 ----------------------------------------------------------------------
 【外置黑名单】
 ----------------------------------------------------------------------
-可在 Mods/item_blacklist.json 覆盖名单（注意：内置黑名单已停用，
-block* 各组当前不产生实际拦截；ignoreTags 仍生效于状态一致性闸门）：
+可在 Mods/item_blacklist.json 覆盖【内置名单】
+（block* 各组均实际生效：某组不写 = 用代码默认，写 [] = 该组清空；
+ignoreTags 另用于状态一致性闸门的忽略名单）：
 
 {
   "blockItemIds": ["metal_ingot", "powerblock"],

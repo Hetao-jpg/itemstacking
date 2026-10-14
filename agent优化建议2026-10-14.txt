@@ -1,0 +1,378 @@
+ItemStacking 优化方案
+一句话总结：mod 对资料库的利用已经很充分，但有 3 处必须修——文档/代码对"内置黑名单是否启用"说法矛盾、StackCap 可能被原生大值绕过、TryAcceptAllMid 返回值语义未确认（可能反了）；其余 5 项按需。
+
+以下给 agent 执行
+优先级总览
+#	优先级	事项	涉及文件	风险
+1	P0	统一"内置黑名单启用状态"的文档/注释/日志	Config.cs / StackGates.cs / Main.cs / README*.txt	无
+2	P0	MaxNumAdd postfix 加硬上限，防 StackCap 被绕过	StackPatches.Value.cs	低（先探针后收紧）
+3	P0	反汇编确认 TryAcceptAllMid 返回值语义（可能反了）	DestroyFix.cs	高（确认前不改）
+4	P1	TryFillEmptySlots 改用成功放置计数，替代指针去重	StackPatches.Merge.cs	低
+5	P1	内置黑名单从 #if true 改 cfg 开关 BuiltinIdBlacklist	Config.cs / StackGates.cs	低
+6	P1	加探针：容器 tag 是否在 GameItem.state、owner: 能否命中机器	Probes.cs	无
+7	P2	DispatchPairRelease 注释澄清"类名 ≠ 实际键位"	ModifierPairTransfer.cs	无
+8	P2	StatesEqual 缓存决策跑实测（已有阈值，缺数据）	StateConsistency.cs	无
+P0-1 · 统一"内置黑名单启用状态"的说法
+问题
+同一事实在 4 处说法不一致：
+
+位置	现说法	与代码实际是否一致
+StackGates.cs #if true 段	启用	✅ 实际行为
+Main.cs 启动日志	「已恢复启用」	✅
+Config.cs _stackBlacklist 注释	「已于 2026-10-12 停用」	❌
+Config.cs _itemBlacklist 注释	「内置名单硬编码…受 StackBlacklist 总闸控制」	✅
+README.md.txt / README_mobile.txt	「已于 2026-10-12 停用」	❌
+依据
+代码：StackGates.cs 的 GetBlacklistReason 内 #if true 段实际执行 MatchIdPair 四路匹配。
+
+Main.cs 启动日志明确输出「内置 id 黑名单【已恢复启用】（node/module/keycard/文书等重新拦截）」。
+
+改法
+Config.cs 的 _stackBlacklist CreateEntry 注释里，把
+"★ 更正（2026-10-13）：内置 id 黑名单…已于 2026-10-12【恢复启用】（StackGates.GetBlacklistReason 的 #if true 段），并非停用。"
+保留，但把前面那段"已于 2026-10-12 停用"整句删掉（避免同段落自相矛盾）。
+
+README.md.txt / README_mobile.txt 里
+"（内置名单 node/module/keycard/文书等已于 2026-10-12 停用）"
+改为
+"（内置名单 node/module/keycard/文书等自 2026-10-12 起恢复启用；如需关闭见 P1-5）"。
+
+若 P1-5（cfg 开关）先落地，则全部改为「由 BuiltinIdBlacklist 控制（默认开）」。
+
+验证
+启动游戏，Latest.log 里搜「内置 id 黑名单」，确认日志与 README 描述一致。
+
+在背包放一个 system_module_* 物品，确认无法堆叠。
+
+风险
+无（纯文档/注释）。
+
+P0-2 · MaxNumAdd postfix 加硬上限
+问题
+StackPatches.Value.cs 的 Patch_MaxNumAdd.Postfix 只提升、不收紧：
+
+csharp
+if (target != null) {
+    int want = StackCap - target.unitCount;
+    if (want > __result) __result = want;
+}
+else if (__result < StackCap) {
+    __result = StackCap;
+}
+若原生 MaxNumAdd 返回一个大值（游戏自身或别的 mod 注入了 maxSlotAmountItemFunc），StackCap 失效。
+
+依据
+物品堆叠机制.md §4.1 原生逻辑：
+
+text
+cap = min(两侧 maxSlotAmount) − targetItem.unitCount
+if (两侧 maxSlotAmount 都 null) cap = 1
+return min(cap, min(两侧 maxSlotAdd))
+§12 设计结论 2：「maxSlotAmount 双侧 null → cap = 1」是"不可堆叠"的容量开关 —— 说明这个字段确实会被注入。
+
+改法
+在 Patch_MaxNumAdd.Postfix 的现有逻辑之后追加（机器容器分支已提前 return，不受影响）：
+
+csharp
+// ★ 硬上限：无论原生给多少，最终不超过 StackCap（已有堆按剩余空间算）。
+//   理由：maxSlotAmountItemFunc 可能被游戏/其他 mod 注入大值，
+//   只提升不收紧会让 StackCap 失效。见 物品堆叠机制.md §4.1。
+int hardCap = (target != null) ? (StackCap - target.unitCount) : StackCap;
+if (hardCap < 0) hardCap = 0;
+if (__result > hardCap) {
+    LogOnce("maxnumadd.clamp." + SafeId(__instance), Level.Diag,
+        $"MaxNumAdd 收紧：{SafeId(__instance)} 原生={before} → 硬上限={hardCap}", max: 3);
+    __result = hardCap;
+}
+验证
+DiagLog=true，观察 maxnumadd.stack / maxnumadd.empty 日志里的 原生={before} 是否曾大于 hardCap。
+
+用 ×10 堆拖到已有 ×9 堆上，确认合并后不超过 StackCap。
+
+风险
+若游戏依赖 maxSlotAmount 做特殊物品容量控制（某些机器/DLC 物品），收紧会改变原版行为。
+
+缓解：先加 maxnumadd.clamp.* 探针跑一轮，确认 before > hardCap 确实发生过，再决定是否启用收紧（可加 cfg 开关 StrictStackCap，默认 true）。
+
+P0-3 · 反汇编确认 TryAcceptAllMid 返回值语义
+问题
+DestroyFix.cs 的 ReturnRemainder 把 TryAcceptAllMid 的返回值按"实际接受件数"使用：
+
+csharp
+int accepted = GraphUtils.TryAcceptAllMid(grid, remainder);
+if (accepted >= remainder.unitCount) { Diag("全归还"); return; }
+int leftover = remainder.unitCount - accepted;
+if (leftover > 0 && accepted > 0)
+    remainder = remainder.GetSplitItem(leftover) ?? remainder;
+依据
+物品堆叠机制.md §8 表格：
+
+TryAcceptAll → int **剩余未接受量**（明确语义）
+
+TryAcceptAllMid → int（未细说，只标注"中间态变体"）
+
+如果 TryAcceptAllMid 也返回"剩余量"，则 DestroyFix 逻辑反了：
+
+全搬完时返回 0 → 0 >= unitCount 为 false → 走 leftover = unitCount - 0 = unitCount → GetSplitItem(unitCount) → 把 remainder 又拆一份出来 → 可能物品翻倍或异常。
+
+改法
+先确认，再改。两条路：
+
+路线 A（推荐）：反汇编确认
+
+powershell
+python scripts\disasm.py 0x7664B0 200    # TryAcceptAllMid RVA（来自 物品堆叠机制.md §11）
+查返回值来源。若尾调 TryAcceptAll（0x766650）→ 语义为"剩余量"；若尾调别的 → 另行分析。
+
+路线 B（不依赖返回值语义）：改用 TryAcceptOnce 逐格循环
+
+csharp
+private static int TryReturnIntoGrid(GameGridInventory grid, GameItem item)
+{
+    if (grid == null || item == null) return 0;
+    int moved = 0, guard = 0;
+    while (item.unitCount > 0 && guard++ < 64) {
+        SlotMarker m;
+        try { m = grid.TryFindOneValidInventorySlot(item); } catch { break; }
+        if (m == null || m.numTransfer <= 0) break;
+        m.item = item;
+        int n;
+        try { n = m.TryAcceptOnce(-1); } catch { break; }
+        if (n <= 0) break;
+        moved += n;
+    }
+    return moved;   // 实际搬走件数（语义明确）
+}
+然后 ReturnRemainder 里改用：
+
+csharp
+int moved = TryReturnIntoGrid(grid, remainder);
+if (moved >= remainder.unitCount) { Diag("全归还"); return; }
+// 部分归还：remainder 内部已减 moved，直接用 remainder 走后续兜底
+注意：GetSplitItem 会改 unitCount，路线 B 不依赖"拆一份再归"的语义，直接调 TryAcceptOnce 搬走，剩多少就剩多少。
+
+验证
+熔炉测试：放 ×10 电子元件触发熔炼，确认余量 9 个回到源容器，总数为 10（不翻倍、不丢）。
+
+DiagLog 看 [销毁修复] 余量已归还源容器 日志。
+
+风险
+路线 A 只是确认，不改代码 → 无风险，但若语义确实是"剩余量"，DestroyFix 现有代码有 bug，需按路线 B 改。
+
+路线 B 改写涉及热路径（销毁修复触发频率低），但改动面比想象大（ReturnRemainder 有 3 处调用：Patch_ConsumeSecondArg / Patch_FurnaceConsume / Patch_FinishDesequencer）。建议先路线 A，若确认反了再走 B。
+
+P1-4 · TryFillEmptySlots 改用成功放置计数
+问题
+StackPatches.Merge.cs 的 TryFillEmptySlots 用 SlotMarker 指针去重：
+
+csharp
+long p = Ptr(m);
+if (!tried.Add(p)) break;
+依据
+物品堆叠机制.md §5.4：GetStackSlot 每次调用 this.parentInventory.虚表[0x208](inv, this) 都 new 一个 marker。TryFindOneValidInventorySlot 每次返回新对象 → 指针不同 → tried 去重几乎不命中。
+
+改法
+改用"成功放置计数"，不再用指针去重：
+
+csharp
+int placed = 0, guard = 0, consecutiveOccupied = 0;
+_selfAcceptDepth++;
+try {
+    while (placed < want && guard++ < 128) {
+        SlotMarker m;
+        try { m = grid.TryFindOneValidInventorySlot(source); } catch { break; }
+        if (m == null) break;
+
+        if (m.targetItem != null || m.numTransfer < 1) {
+            // 已占用/满槽：试下一个，不计 placed
+            if (++consecutiveOccupied >= 8) break;  // 连续 8 次都占用 → 认为没空位了
+            continue;
+        }
+        consecutiveOccupied = 0;
+
+        m.item = source;
+        int n;
+        try { n = m.TryAcceptOnce(1); } catch { break; }
+        if (n > 0) placed += n;
+        else break;   // 真放不进（非占用）→ 停
+    }
+} finally { _selfAcceptDepth--; }
+return placed;
+验证
+熔炉/解序器里放 ×10 堆，Ctrl 快移，DiagLog 看 ctrl.fill.* 日志的 moved 是否等于 min(unitCount, 空位数)。
+
+每格 1 件、共铺开 10 格（机器不合并）。
+
+风险
+continue 不递增 placed 靠 guard 兜底，guard=128 足够。
+
+加"连续占用 8 次 break"避免 finder 死循环返回同一个已占用槽。
+
+P1-5 · 内置黑名单改 cfg 开关
+问题
+StackGates.cs 的 #if true / #if false 是编译期开关，用户改不了。导致 P0-1 的文档一致性问题永远存在。
+
+依据
+Config.cs 已有 _stackBlacklist 总闸，内置黑名单是其子集，但缺独立开关。
+
+改法
+1. Config.cs 加字段与 CreateEntry
+
+csharp
+private static MelonPreferences_Entry<bool> _builtinIdBlacklist = null!;
+// CreateConfigEntries 里，_stackBlacklist 之后加：
+_builtinIdBlacklist = cat.CreateEntry<bool>(
+    "BuiltinIdBlacklist", true,
+    "内置 id 黑名单（node/module/keycard/文书等）",
+    "★ 2026-10-12 起默认启用。控制 BuiltinBlacklist.cs 的默认名单" +
+    "（净水试纸/药片、钥匙卡、莓果、能量阵列、模组 module/neural_core、" +
+    "节点 node*、文书/名片/刮刮乐等）。\n" +
+    "关闭后仅 cfg 自定义 ItemBlacklist 生效。\n" +
+    "★ 与 StackBlacklist 总闸的关系：总闸关 = 内置 + 自定义全关；" +
+    "本项关 + 总闸开 = 仅内置关、自定义仍生效。");
+internal static bool BuiltinIdBlacklist => _builtinIdBlacklist == null || _builtinIdBlacklist.Value;
+2. StackGates.cs 把 #if true 改为 if (BuiltinIdBlacklist)
+
+csharp
+// 原 #if true / #endif 段
+if (BuiltinIdBlacklist)
+{
+    var pat = MatchIdPair(a, b, BuiltinBlockItemIds, IdMatch.Exact);
+    if (pat != null) return "按 id 黑名单·内置（" + pat + "）";
+    pat = MatchIdPair(a, b, BuiltinBlockIdPrefixes, IdMatch.Prefix);
+    if (pat != null) return "按 id 前缀黑名单·内置（" + pat + "*）";
+    pat = MatchIdPair(a, b, BuiltinBlockIdContains, IdMatch.Contains);
+    if (pat != null) return "按 id 子串黑名单·内置（*" + pat + "*）";
+    pat = MatchIdPair(a, b, BuiltinBlockIdSuffixes, IdMatch.Suffix, IsSuffixExempt);
+    if (pat != null) return "按 id 后缀黑名单·内置（*" + pat + "）";
+}
+// 保留 #if true / #endif 注释说明历史
+3. Main.cs 启动日志
+把「内置 id 黑名单【已恢复启用】」改为「内置 id 黑名单 = {BuiltinIdBlacklist}」。
+
+4. README / Config 注释
+统一改为「由 BuiltinIdBlacklist 控制（默认开）」。
+
+验证
+cfg 改 BuiltinIdBlacklist=false 重启 → system_module_* 可堆叠。
+
+cfg 改 BuiltinIdBlacklist=true 重启 → 不可堆叠。
+
+cfg 改 StackBlacklist=false → 内置 + 自定义全关。
+
+风险
+老 cfg 里没这个键 → MelonPreferences 用默认 true → 行为不变。
+
+GetBlacklistReason 开头的 if (_stackBlacklist != null && !_stackBlacklist.Value) return null; 已处理总闸，无需改。
+
+P1-6 · 加探针确认容器 tag 在 state / owner: 能否命中机器
+问题 A：容器 tag 是否在 GameItem.state
+StackGates.cs 的 IsContainer 用 FindAllChildItems().Count > 0 判"装了东西"。空容器可叠。若容器自身的 CAGE_SIZE_TAG / FRIDGE_STORAGE_UPGRADE_COUNT_TAG 在 state.dict 里，状态闸门会拦下不同尺寸的空容器；若不在，空容器会被错误合并。
+
+资料库证据不足以确认：存读档机制.md §5 说 tag 是 _keys / _values，GetTagReadonly 读 +0x30；物品堆叠机制.md §1.3 说 GameItem.state 是 TagSystem +0x1B0。但没明说两者关系。
+
+探针：
+
+csharp
+// Probes.cs，新方法
+internal static void ProbeContainerTagState(GameItem a, GameItem b)
+{
+    if (!DiagOn) return;
+    if (a == null || b == null) return;
+    bool aIsContainer = a.IsTag("CONTAINER_TAG");
+    bool bIsContainer = b.IsTag("CONTAINER_TAG");
+    if (!aIsContainer && !bIsContainer) return;
+    if (IsContainer(a) || IsContainer(b)) return;   // 有内容的容器已被拦，不看
+
+    // 打印两者 state.dict 的 key 集合，确认容器尺寸 tag 是否在其中
+    var keysA = DumpStateKeys(a);   // 新 helper：遍历 _state_k__BackingField.dict 拼 key 串
+    var keysB = DumpStateKeys(b);
+    LogOnce("probe.containertag." + SafeId(a) + "/" + SafeId(b), Level.Diag,
+        $"[容器tag探针] {SafeId(a)} keys={keysA}\n  {SafeId(b)} keys={keysB}", max: 3);
+}
+调用点：StackPatches.Merge.cs 的 Patch_MayStack.Prefix 里，Evaluate 返回 Allow 且 idA == idB 时调一次。
+
+问题 B：owner: token 能否命中机器容器
+BuiltinBlacklist.cs 的 DefaultMachineContainerTokens 全部是 owner:furnace 等。资料库 容器存放限制机制.md §4 说 owner: 走 GetParentItem() 上溯。ValidatePatches 只查了 GetParentItem 存在，没验证机器容器实例上能否真的上溯。
+
+探针：
+
+csharp
+// Probes.cs，进场景后一次性触发（仿 CounterIdProbe）
+private static bool _machineOwnerProbed;
+internal static void MachineOwnerProbeTick()
+{
+    if (!DiagOn) return;
+    if (_machineOwnerProbed) return;
+    var entry = TryGet(() => EmporiumEntry.Instance);
+    if (entry == null) return;
+    _machineOwnerProbed = true;
+
+    // 对每个机器 token，尝试在场景里找一个对应容器并打印归属链
+    // 实际实现：遍历 EmporiumEntry 已知容器 + 玩家背包子树，对每个命中 IsMachineContainer 的容器打印
+    foreach (var token in MachineContainerTokens) {
+        // 简化：只打印 owner: 后半段 + 能否在某容器上命中
+        // 具体实现需遍历容器（可复用 ProbeScopeInventory 的 _scopeProbed 集合）
+    }
+}
+验证
+问题 A：DiagLog=true 时把两个空工具箱拖到一起，看 [容器tag探针] 输出的 keys 里有没有 CAGE_SIZE_TAG 之类。
+
+问题 B：进熔炉场景，看 [机器owner探针] 是否打印出 furnace 上溯链。
+
+风险
+无（探针只读）。
+
+P2-7 · DispatchPairRelease 注释澄清
+问题
+ModifierPairTransfer.cs 的 logKey "pair-alt" 挂在 ItemQuickTransferAltHandler 上，但资料库 物品交互快捷键与鼠标逻辑.md §2.1 说这个类实际绑的是 LeftShift。
+
+改法
+在 RunPairRelease 调用点上方加注释：
+
+csharp
+// ★ 类名 ≠ 实际键位（资料库 §2.1 实测）：
+//   ItemQuickTransferHandler      → LeftControl
+//   ItemQuickTransferAltHandler   → LeftShift
+//   ItemQuickTransferAltHandler1  → LeftAlt
+//   logKey 沿用旧名（pair-alt），但实际处理的是 Shift —— 以运行时字段值为准。
+验证
+无（纯注释）。logKey 不改（避免破坏已有日志检索习惯）。
+
+P2-8 · StatesEqual 缓存实测
+问题
+StateConsistency.cs 注释里写了决策阈值：
+
+平均 > 50µs → 考虑缓存；平均 < 20µs → 保持现状。
+
+目前无实测数据。
+
+改法
+开 DiagLog=true，跑几次拖放（含 480 物品的背包）。
+
+看 [状态比较·耗时] 输出。
+
+按阈值决策：
+
+< 20µs：不动，注释里补一行实测值。
+
+20~50µs：观察，不改。
+
+50µs：开缓存任务。缓存 key 必须包含 GameItem 指针 + state 修改版本（ModifyTag / EnableTag 会改 state），复杂度不低。
+
+验证
+DiagLog 输出。
+
+风险
+若加缓存而失效逻辑不严，会读到过期状态 → 错误放行 → 数据污染。50µs 阈值是合理的保守线。
+
+执行顺序建议
+先做 P0-3 路线 A（反汇编确认 TryAcceptAllMid），因为它可能揭示 P0 级 bug。
+
+再做 P0-1 + P0-2 + P1-5（三项一起改，因为 P1-5 会顺带解决 P0-1 的文档统一）。
+
+P1-4 + P1-6 并行（探针 + 计数改写）。
+
+P2-7 + P2-8 收尾。
+
+每项改完跑一次启动自检（ValidatePatches），确保 failures.Count == 0。

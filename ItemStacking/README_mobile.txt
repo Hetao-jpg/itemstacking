@@ -1,6 +1,6 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Item Stacking · 自定义物品堆叠
-作者：核桃 | 版本：0.14.0
+作者：核桃 | 版本：0.14.2
 游戏：Probably Stolen 0.46D
 环境：MelonLoader 0.7.4+
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,8 +18,9 @@ Item Stacking · 自定义物品堆叠
 · Shift 快移：展示柜 ↔ 主仓库
 · 状态一致性：状态完全相等才可合
 · 容器防护：装了东西禁止合并
-· 物品黑名单：仅自定义 ItemBlacklist
-  （内置名单已停用）
+· 物品黑名单：内置名单（node/
+  module/keycard/文书等）默认启用，
+  可用 cfg 关闭；另可自定义
 · 容器白名单/黑名单
 · 整堆计价（默认关）
 · 销毁修复：打印机/模块/采矿机/
@@ -69,9 +70,11 @@ Ctrl整堆（CtrlDragWholeStack）：开
 容器白名单（ContainerWhitelist）：常用容器集合
   ★ 空 = 全不生效
 容器黑名单（ContainerBlacklist）：空
+内置名单（BuiltinIdBlacklist）：开
+  （node/module/keycard/文书等）
 物品黑名单（ItemBlacklist）：空
-  （内置名单已停用）
-柜台禁堆（BlockCounterStack）：关
+  （内置之外再补，可留空）
+上限硬收紧（StrictStackCap）：关
 整堆计价（StackValueTotal）：关
 修饰键总开关（ModifierKeysEnabled）：开
 Alt快移总闸（AltClickTransferToCounter）：开
@@ -85,9 +88,10 @@ Alt配对模式（AltPairMode）：counter_inv
 值含逗号请加引号。
 
 ▎外置黑名单
-Mods/item_blacklist.json 可覆盖
-（内置名单已停用，block* 组暂不生效；
-ignoreTags 仍用于状态比较）：
+Mods/item_blacklist.json 可覆盖内置名单
+（block* 各组均实际生效：
+ 不写=用默认，写[]=清空该组；
+ ignoreTags 仍用于状态比较）：
 {
   "blockItemIds": ["metal_ingot"],
   "ignoreTags": ["UI_SELECTED_TAG"]
